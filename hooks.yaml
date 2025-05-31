@@ -1,0 +1,12 @@
+hooks:
+  pre_prompts:
+    - name: "log_interactions"
+      instruction: "Summarize and log all chat interactions to the file called chatlog.md"
+    - name: "development_workflow"
+      instruction: "# Development workflow
+- Read the design_document.md implementation plan
+- Think step by step and break down each line item even further and explain how you will execute it
+- Get acceptance from the user
+- Begin implementation only on the agreed scope
+- Follow development best practices such as modularizing the code and making sure solution is deployable in a brand new environment
+- Once implemented, update the design_document.md to denote it's completed"

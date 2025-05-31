@@ -1,0 +1,21 @@
+# Core dependencies
+strands-agents==0.1.6
+strands-agents-builder==0.1.2
+strands-agents-tools==0.1.4
+boto3>=1.38.0
+aws-cdk-lib>=2.0.0
+
+# Development dependencies
+pytest>=8.3.0
+pytest-cov>=6.1.0
+black>=25.1.0
+isort>=6.0.0
+flake8>=7.2.0
+
+# AWS AppSync dependencies
+requests>=2.0.0
+websockets>=12.0.0
+
+# Visualization dependencies (for frontend)
+matplotlib>=3.0.0
+pandas>=2.0.0

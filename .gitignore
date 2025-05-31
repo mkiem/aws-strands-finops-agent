@@ -77,6 +77,8 @@ samconfig.toml
 
 # Command logger output
 chatlog.md
+chatlog_summary.md
+chatcompact.json
 
 # Misc
 .DS_Store

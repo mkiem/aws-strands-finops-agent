@@ -1,6 +1,12 @@
 # finopsAgent
 AWS FinOps Agent
 
+# strands full documentation
+strands_documentation.md
+
+# reference this yaml for example agent / lambda set up for the mcp server
+https://github.com/aws-samples/sample-finops-bedrock-multiagent-nova/blob/main/cfn-finops-bedrock-multiagent-nova.yaml
+
 # packages, libraries, and sdks
 https://strandsagents.com/0.1.x/user-guide/quickstart/
 

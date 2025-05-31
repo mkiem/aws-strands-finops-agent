@@ -161,11 +161,11 @@ This document outlines the design for building a FinOps Agent using Strands SDK 
 ### Phase 1: Core Agent Framework and Infrastructure Setup
 
 1. Set up Strands SDK development environment ✅
-2. Configure AWS Lambda for agent hosting
-3. Set up AWS AppSync for communication
-4. Implement basic FinOps Supervisor Agent
-5. Create agent communication framework
-6. Develop basic natural language processing capabilities
+2. Configure AWS Lambda for agent hosting ✅
+3. Set up AWS AppSync for communication ✅
+4. Implement basic FinOps Supervisor Agent ✅
+5. Create agent communication framework ✅
+6. Develop basic natural language processing capabilities ✅
 
 ### Phase 2: Cost Analysis Agent
 

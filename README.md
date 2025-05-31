@@ -1,0 +1,2 @@
+# finopsAgent
+AWS FinOps Agent

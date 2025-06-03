@@ -62,11 +62,13 @@ coverage/
 tmp/
 temp/
 .tmp/
+repl_state/
 
 # AWS specific
 .aws-sam/
 samconfig.toml
 .aws-config/
+.amazonq/
 
 # Local environment files
 .env
@@ -88,3 +90,25 @@ Thumbs.db
 command_logger.sh
 log_conversation.sh
 setup_command_logging.sh
+
+# Build artifacts
+*.zip
+finops-ui-build*.zip
+finops-ui-project.zip
+finops_agent_lambda.zip
+package/
+
+# Deployment packages
+/my_agent/packaging/_dependencies/
+
+# Test and debug files
+payload.json
+payload.txt
+response.json
+
+# Unused directories
+finops-agent-ui/
+
+# Large documentation files that can be regenerated
+strands_documentation.md
+finopsDirHistory.json

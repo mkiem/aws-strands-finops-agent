@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation template for FinOps Agent Lambda function with Bedrock access'
+
+Parameters:
+  AppS3Key:
+    Type: String
+    Default: app.zip
+    Description: S3 key for the Lambda application code
+    
+  DependenciesS3Key:
+    Type: String
+    Default: dependencies.zip
+    Description: S3 key for the Lambda dependencies layer
+    
+  LambdaTimeout:
+    Type: Number
+    Default: 30
+    Description: Lambda function timeout in seconds
+    
+  LambdaMemorySize:
+    Type: Number
+    Default: 256
+    Description: Lambda function memory size in MB
+
+Resources:
+  FinOpsAgentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ce:GetCostAndUsage
+                  - ce:GetCostForecast
+                  - ce:GetReservationUtilization
+                  - ce:GetSavingsPlansUtilization
+                  - ce:GetDimensionValues
+                  - ce:GetTags
+                Resource: '*'
+  
+  FinOpsAgentDependenciesLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      LayerName: finops-agent-dependencies
+      Description: Dependencies for FinOps Agent
+      Content:
+        S3Bucket: finops-deployment-packages-062025
+        S3Key: !Ref DependenciesS3Key
+      CompatibleRuntimes:
+        - python3.10
+        - python3.11
+        - python3.12
+      
+  FinOpsAgentLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: finops-agent
+      Description: FinOps Agent powered by Strands SDK with Bedrock integration
+      Runtime: python3.10
+      Handler: lambda_handler.handler
+      Role: !GetAtt FinOpsAgentRole.Arn
+      Code:
+        S3Bucket: finops-deployment-packages-062025
+        S3Key: !Ref AppS3Key
+      Timeout: !Ref LambdaTimeout
+      MemorySize: !Ref LambdaMemorySize
+      Layers:
+        - !Ref FinOpsAgentDependenciesLayer
+      Environment:
+        Variables:
+          REGION: !Ref AWS::Region
+          LOG_LEVEL: INFO
+          
+  FinOpsAgentLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${FinOpsAgentLambda}"
+      RetentionInDays: 30
+
+Outputs:
+  LambdaFunction:
+    Description: FinOps Agent Lambda Function
+    Value: !Ref FinOpsAgentLambda
+    
+  LambdaFunctionArn:
+    Description: FinOps Agent Lambda Function ARN
+    Value: !GetAtt FinOpsAgentLambda.Arn
+    
+  DependenciesLayer:
+    Description: FinOps Agent Dependencies Layer
+    Value: !Ref FinOpsAgentDependenciesLayer

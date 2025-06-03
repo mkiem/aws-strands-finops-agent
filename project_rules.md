@@ -1,0 +1,14 @@
+- Use Strands SDK as the core development framework, search the strands documentation website as needed: https://strandsagents.com/
+- Use Python 3.10 and above when developing in Python
+- Do not deploy an application code, simply package it up for manual deployment
+- When building a deployment package, always keep it in the same folder as the main application file project folder
+- When building a deployment package, use what's in the local environment to avoid issues, reference design_document.md for notes
+- Prefer CloudFormation for IAC into AWS (exception made for Lambda, use CDK)
+- Keep services / capabilities self contained in its own folder that is self-encompassing for portability like a microservice
+- Name the Cloudformation scripts to be self-evident, that matches the application
+- All Cloudformation deployment packages should be stored in this S3 bucket: "finops-deployment-packages-062025"
+- MCP refer to Model Context Protocol (https://docs.anthropic.com/en/docs/agents-and-tools/mcp)
+- When you troubleshoot and can't fix the issue, use the AWS Documentation MCP Server to research or use CURL to research websites for the latest information
+- Use CURL to research websites
+- Use AWS Documentation MCP Tool to research AWS services
+- You can start a python virutal environmeny with: source .venv/bin/activate

@@ -1,0 +1,8 @@
+conversation_start_hooks:
+  - name: pre-prompt
+    enabled: true
+    command: cat /home/ec2-user/projects/finopsAgent/project_rules.md
+    description: "Load pre-prompt instructions from file"
+
+per_prompt_hooks:
+  # You can add your per_prompt_hooks here if needed

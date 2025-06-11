@@ -101,6 +101,8 @@ def handle_default(event, connection_id):
             return handle_authenticate(connection_id, body)
         elif action == 'finops_query':
             return handle_finops_query(connection_id, body)
+        elif action == 'ping':
+            return handle_ping(connection_id, body)
         else:
             return format_response(400, json.dumps({
                 'type': 'error',
@@ -160,6 +162,22 @@ def handle_finops_query(connection_id, body):
     except Exception as e:
         logger.error(f"Error handling FinOps query: {str(e)}")
         return format_response(500, f'Query handling failed: {str(e)}')
+
+def handle_ping(connection_id, body):
+    """Handle ping request for heartbeat."""
+    try:
+        # Respond with pong to keep connection alive
+        send_message_to_connection(connection_id, {
+            'action': 'pong',
+            'timestamp': int(time.time())
+        })
+        
+        logger.debug(f"Ping/pong handled for connection: {connection_id}")
+        return format_response(200, 'Pong sent')
+        
+    except Exception as e:
+        logger.error(f"Error handling ping: {str(e)}")
+        return format_response(500, f'Ping handling failed: {str(e)}')
 
 def send_message_to_connection(connection_id, message):
     """Send message to WebSocket connection."""

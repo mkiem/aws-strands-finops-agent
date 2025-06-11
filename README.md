@@ -338,4 +338,18 @@ curl -X POST \
   - **Authentication**: Post-connection authentication via WebSocket messages
   - **Performance**: Successfully processes complex FinOps queries with supervisor agent orchestration
   - **User Experience**: Real-time progress (5% → 30% → 60% → 90% → 100%) with full response display
-  - **Last Updated**: 2025-06-11 ✅ **PRODUCTION READY** - All issues resolved, fully functional
+- **Budget Management Agent**: budget-management-agent
+  - **Status**: ✅ **DEPLOYED** - Proactive cost control and governance
+  - **Function**: budget-management-agent
+  - **Runtime**: Python 3.11 with Strands SDK
+  - **Framework**: Strands Agent with Claude 3.5 Haiku
+  - **Capabilities**: 
+    - Automated budget creation and monitoring
+    - Budget performance analysis and recommendations  
+    - Real-time budget alerts and governance
+    - Proactive cost control through budget actions
+    - Integration with Cost Explorer for recommendations
+  - **Tools**: get_budget_analysis, get_budget_recommendations, create_budget, monitor_budget_alerts, get_budget_performance_history
+  - **CloudFormation Stack**: budget-management-agent
+  - **S3 Package**: s3://finops-deployment-packages-062025/budget-management-agent.zip
+  - **Last Updated**: 2025-06-11 (Created new microservice using Strands framework)

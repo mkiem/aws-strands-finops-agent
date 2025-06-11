@@ -213,6 +213,67 @@
     margin-top: 15px;
   }
 }
+/* Connection Status Styles */
+.connection-status {
+  margin-top: 8px;
+}
+
+.connection-status small {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.reconnect-btn {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.reconnect-btn:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.reconnect-btn:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
+/* Enhanced Progress Section */
+.progress-section {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  padding: 20px;
+  margin: 20px 0;
+  color: white;
+  text-align: center;
+}
+
+.progress-bar {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  height: 8px;
+  margin: 15px 0;
+  overflow: hidden;
+}
+
+.progress-fill {
+  background: linear-gradient(90deg, #00d4aa, #00a8ff);
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.3s ease;
+}
+
+.progress-message {
+  margin: 10px 0 0 0;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
 /* Streaming Section Styles */
 .streaming-section {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);

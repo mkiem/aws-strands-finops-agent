@@ -36,6 +36,8 @@ function App({ signOut, user }) {
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
   const [currentJobId, setCurrentJobId] = useState(null);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [reconnectionInfo, setReconnectionInfo] = useState({ attempts: 0, maxAttempts: 0 });
   
   const wsClient = useRef(null);
 
@@ -88,6 +90,19 @@ function App({ signOut, user }) {
   const handleWebSocketClose = (event) => {
     console.log('WebSocket closed:', event);
     setWsStatus('DISCONNECTED');
+    setIsReconnecting(false); // Reset reconnecting state when connection closes
+  };
+
+  const handleWebSocketReconnecting = (reconnecting, attempts, maxAttempts) => {
+    setIsReconnecting(reconnecting);
+    setReconnectionInfo({ attempts, maxAttempts });
+    
+    if (reconnecting) {
+      setWsStatus('RECONNECTING');
+    } else if (attempts >= maxAttempts) {
+      setWsStatus('FAILED');
+      setError('WebSocket connection failed after multiple attempts. Using REST API fallback.');
+    }
   };
 
   // Initialize WebSocket connection
@@ -97,7 +112,8 @@ function App({ signOut, user }) {
         config.api.websocketEndpoint,
         handleWebSocketMessage,
         handleWebSocketError,
-        handleWebSocketClose
+        handleWebSocketClose,
+        handleWebSocketReconnecting
       );
       
       wsClient.current.connect();
@@ -105,7 +121,11 @@ function App({ signOut, user }) {
       // Update connection status
       const statusInterval = setInterval(() => {
         if (wsClient.current) {
-          setWsStatus(wsClient.current.getConnectionState());
+          const currentStatus = wsClient.current.getConnectionState();
+          // Only update status if not currently reconnecting
+          if (!isReconnecting || currentStatus === 'CONNECTED') {
+            setWsStatus(currentStatus);
+          }
         }
       }, 1000);
       
@@ -116,7 +136,7 @@ function App({ signOut, user }) {
         }
       };
     }
-  }, [useWebSocket]);
+  }, [useWebSocket, isReconnecting]);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -129,18 +149,64 @@ function App({ signOut, user }) {
     setProgressMessage('');
 
     try {
-      if (useWebSocket && wsClient.current && wsClient.current.isConnected()) {
-        // Use WebSocket for real-time updates (no timeout limit)
-        console.log('Using WebSocket for query');
-        wsClient.current.sendFinOpsQuery(query);
-        setProgressMessage('Query sent via WebSocket...');
+      if (useWebSocket && wsClient.current) {
+        // Always try WebSocket first - let the client handle reconnection
+        console.log('Attempting WebSocket query...');
+        setProgressMessage('Connecting to WebSocket...');
+        
+        try {
+          await wsClient.current.sendFinOpsQuery(query);
+          setProgressMessage('Query sent via WebSocket...');
+        } catch (wsError) {
+          console.warn('WebSocket failed, falling back to REST API:', wsError);
+          setError(null); // Clear any previous errors
+          
+          // Fall back to REST API
+          console.log('Using REST API fallback');
+          let apiResponse = await makeUnsignedRequest(config.api.legacyEndpoint, { query });
+
+          if (!apiResponse.ok) {
+            throw new Error(`HTTP error! status: ${apiResponse.status}`);
+          }
+
+          const responseText = await apiResponse.text();
+          console.log('API Raw Response:', responseText);
+
+          let parsedResponse;
+          try {
+            parsedResponse = JSON.parse(responseText);
+            console.log('Parsed Response:', parsedResponse);
+            
+            // Handle different response formats
+            if (parsedResponse.body && typeof parsedResponse.body === 'string') {
+              try {
+                const bodyObj = JSON.parse(parsedResponse.body);
+                setResponse(bodyObj);
+              } catch (e) {
+                setResponse({ 
+                  query: query,
+                  response: parsedResponse.body 
+                });
+              }
+            } else if (parsedResponse.body && typeof parsedResponse.body === 'object') {
+              setResponse(parsedResponse.body);
+            } else {
+              setResponse(parsedResponse);
+            }
+          } catch (e) {
+            setResponse({ 
+              query: query,
+              response: responseText 
+            });
+          }
+          
+          setLoading(false);
+        }
         
       } else {
-        // Fallback to REST API
-        console.log('Using REST API for query');
-        let apiResponse;
-        
-        apiResponse = await makeUnsignedRequest(config.api.legacyEndpoint, { query });
+        // WebSocket disabled, use REST API
+        console.log('WebSocket disabled, using REST API');
+        let apiResponse = await makeUnsignedRequest(config.api.legacyEndpoint, { query });
 
         if (!apiResponse.ok) {
           throw new Error(`HTTP error! status: ${apiResponse.status}`);
@@ -189,6 +255,32 @@ function App({ signOut, user }) {
     }
   };
 
+  // Manual reconnection handler
+  const handleManualReconnect = async () => {
+    if (wsClient.current) {
+      setError(null);
+      setIsReconnecting(true);
+      setWsStatus('RECONNECTING');
+      
+      try {
+        const connected = await wsClient.current.reconnect();
+        if (connected) {
+          setWsStatus('CONNECTED');
+          setIsReconnecting(false);
+        } else {
+          setWsStatus('FAILED');
+          setIsReconnecting(false);
+          setError('Failed to reconnect WebSocket');
+        }
+      } catch (error) {
+        console.error('Manual reconnection failed:', error);
+        setWsStatus('FAILED');
+        setIsReconnecting(false);
+        setError('Manual reconnection failed');
+      }
+    }
+  };
+
   return (
     <div className="App">
       <header className="App-header">
@@ -232,12 +324,30 @@ function App({ signOut, user }) {
               />
               Use WebSocket API - Real-time Updates, No Timeout Limits
             </label>
-            <small>
-              {useWebSocket 
-                ? `✅ WebSocket: ${wsStatus} - Real-time progress updates, unlimited processing time`
-                : "⚠️ Using legacy API Gateway (29s timeout limit)"
-              }
-            </small>
+            <div className="connection-status">
+              {useWebSocket ? (
+                <div>
+                  <small>
+                    {wsStatus === 'CONNECTED' && '✅ WebSocket: Connected - Real-time updates active'}
+                    {wsStatus === 'CONNECTING' && '🔄 WebSocket: Connecting...'}
+                    {wsStatus === 'RECONNECTING' && `🔄 WebSocket: Reconnecting (${reconnectionInfo.attempts}/${reconnectionInfo.maxAttempts})...`}
+                    {wsStatus === 'DISCONNECTED' && '⚠️ WebSocket: Disconnected - Will auto-reconnect on next query'}
+                    {wsStatus === 'FAILED' && '❌ WebSocket: Connection failed - Using REST API fallback'}
+                  </small>
+                  {(wsStatus === 'DISCONNECTED' || wsStatus === 'FAILED') && (
+                    <button 
+                      onClick={handleManualReconnect} 
+                      className="reconnect-btn"
+                      disabled={isReconnecting}
+                    >
+                      {isReconnecting ? 'Reconnecting...' : 'Reconnect Now'}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <small>⚠️ Using legacy API Gateway (29s timeout limit)</small>
+              )}
+            </div>
           </div>
         </div>
 

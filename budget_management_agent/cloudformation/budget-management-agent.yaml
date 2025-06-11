@@ -1,0 +1,240 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Budget Management Agent - Proactive cost control and governance'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: budget-management
+    Description: Name of the project for resource naming
+  
+  LambdaS3Bucket:
+    Type: String
+    Default: finops-deployment-packages-062025
+    Description: S3 bucket containing Lambda deployment package
+  
+  LambdaS3Key:
+    Type: String
+    Default: budget-management-agent.zip
+    Description: S3 key for Lambda deployment package
+  
+  LambdaTimeout:
+    Type: Number
+    Default: 300
+    Description: Lambda function timeout in seconds
+  
+  LambdaMemorySize:
+    Type: Number
+    Default: 512
+    Description: Lambda function memory size in MB
+  
+  LogLevel:
+    Type: String
+    Default: INFO
+    AllowedValues: [DEBUG, INFO, WARNING, ERROR]
+    Description: Lambda function log level
+
+Resources:
+  # IAM Role for Budget Management Lambda
+  BudgetManagementLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BudgetManagementPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # AWS Budgets permissions
+              - Effect: Allow
+                Action:
+                  - budgets:CreateBudget
+                  - budgets:UpdateBudget
+                  - budgets:DeleteBudget
+                  - budgets:DescribeBudget
+                  - budgets:DescribeBudgets
+                  - budgets:DescribeBudgetPerformanceHistory
+                  - budgets:CreateBudgetAction
+                  - budgets:UpdateBudgetAction
+                  - budgets:DeleteBudgetAction
+                  - budgets:DescribeBudgetAction
+                  - budgets:DescribeBudgetActionHistories
+                  - budgets:DescribeBudgetActionsForAccount
+                  - budgets:DescribeBudgetActionsForBudget
+                  - budgets:ExecuteBudgetAction
+                  - budgets:CreateNotification
+                  - budgets:UpdateNotification
+                  - budgets:DeleteNotification
+                  - budgets:DescribeNotificationsForBudget
+                  - budgets:CreateSubscriber
+                  - budgets:UpdateSubscriber
+                  - budgets:DeleteSubscriber
+                  - budgets:DescribeSubscribersForNotification
+                  - budgets:ListTagsForResource
+                  - budgets:TagResource
+                  - budgets:UntagResource
+                Resource: '*'
+              
+              # Cost Explorer permissions for recommendations
+              - Effect: Allow
+                Action:
+                  - ce:GetCostAndUsage
+                  - ce:GetUsageReport
+                  - ce:GetReservationCoverage
+                  - ce:GetReservationPurchaseRecommendation
+                  - ce:GetReservationUtilization
+                  - ce:GetSavingsPlansUtilization
+                  - ce:GetSavingsPlansCoverage
+                  - ce:ListCostCategoryDefinitions
+                  - ce:GetRightsizingRecommendation
+                Resource: '*'
+              
+              # DynamoDB permissions for state management
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !GetAtt BudgetStateTable.Arn
+              
+              # CloudWatch Logs permissions
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-*'
+
+  # DynamoDB Table for Budget State Management
+  BudgetStateTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-state'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: budget_name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: budget_name
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Component
+          Value: BudgetManagement
+
+  # Lambda Function
+  BudgetManagementFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-agent'
+      Runtime: python3.11
+      Handler: lambda_handler.lambda_handler
+      Role: !GetAtt BudgetManagementLambdaRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaS3Bucket
+        S3Key: !Ref LambdaS3Key
+      Timeout: !Ref LambdaTimeout
+      MemorySize: !Ref LambdaMemorySize
+      Environment:
+        Variables:
+          LOG_LEVEL: !Ref LogLevel
+          BUDGET_STATE_TABLE: !Ref BudgetStateTable
+          AWS_ACCOUNT_ID: !Ref AWS::AccountId
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Component
+          Value: BudgetManagement
+
+  # CloudWatch Log Group
+  BudgetManagementLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-agent'
+      RetentionInDays: 14
+
+  # IAM Role for Budget Actions (used by budget actions to execute policies)
+  BudgetActionExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-action-execution-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: budgets.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: BudgetActionExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # IAM permissions for applying policies
+              - Effect: Allow
+                Action:
+                  - iam:AttachUserPolicy
+                  - iam:AttachGroupPolicy
+                  - iam:AttachRolePolicy
+                  - iam:DetachUserPolicy
+                  - iam:DetachGroupPolicy
+                  - iam:DetachRolePolicy
+                Resource: '*'
+              
+              # EC2 permissions for instance control
+              - Effect: Allow
+                Action:
+                  - ec2:StopInstances
+                  - ec2:StartInstances
+                  - ec2:DescribeInstances
+                Resource: '*'
+              
+              # SSM permissions for automation
+              - Effect: Allow
+                Action:
+                  - ssm:SendCommand
+                  - ssm:GetCommandInvocation
+                  - ssm:DescribeInstanceInformation
+                Resource: '*'
+
+Outputs:
+  BudgetManagementFunctionArn:
+    Description: ARN of the Budget Management Lambda function
+    Value: !GetAtt BudgetManagementFunction.Arn
+    Export:
+      Name: !Sub '${ProjectName}-function-arn'
+  
+  BudgetManagementFunctionName:
+    Description: Name of the Budget Management Lambda function
+    Value: !Ref BudgetManagementFunction
+    Export:
+      Name: !Sub '${ProjectName}-function-name'
+  
+  BudgetStateTableName:
+    Description: Name of the Budget State DynamoDB table
+    Value: !Ref BudgetStateTable
+    Export:
+      Name: !Sub '${ProjectName}-state-table'
+  
+  BudgetActionExecutionRoleArn:
+    Description: ARN of the Budget Action Execution Role
+    Value: !GetAtt BudgetActionExecutionRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-action-role-arn'

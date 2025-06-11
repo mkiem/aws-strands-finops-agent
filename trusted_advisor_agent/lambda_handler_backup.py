@@ -187,6 +187,79 @@ def get_trusted_advisor_recommendations(category: str = "cost_optimizing") -> st
         })
 
 @tool
+def get_recommendation_details(recommendation_id: str) -> str:
+    """
+    Get detailed information about a specific Trusted Advisor recommendation.
+    
+    Args:
+        recommendation_id: The ID of the recommendation to get details for
+        
+    Returns:
+        JSON string containing detailed recommendation information
+    """
+    try:
+        logger.info(f"Getting details for recommendation: {recommendation_id}")
+        
+        # Try new TrustedAdvisor API first
+        try:
+            response = trustedadvisor_client.get_recommendation(
+                recommendationIdentifier=recommendation_id
+            )
+            
+            recommendation = response.get('recommendation', {})
+            return json.dumps({
+                'source': 'TrustedAdvisor API',
+                'recommendation': {
+                    'id': recommendation.get('id'),
+                    'name': recommendation.get('name'),
+                    'description': recommendation.get('description'),
+                    'status': recommendation.get('status'),
+                    'type': recommendation.get('type'),
+                    'pillars': recommendation.get('pillars', []),
+                    'source': recommendation.get('source'),
+                    'resources': recommendation.get('resources', [])
+                }
+            }, cls=DateTimeEncoder)
+            
+        except ClientError as e:
+            if e.response['Error']['Code'] in ['AccessDeniedException', 'UnauthorizedOperation']:
+                logger.info("New TrustedAdvisor API not accessible, falling back to Support API")
+                
+                # Fallback to Support API
+                result = support_client.describe_trusted_advisor_check_result(
+                    checkId=recommendation_id,
+                    language='en'
+                )
+                
+                check_result = result['result']
+                return json.dumps({
+                    'source': 'Support API',
+                    'recommendation': {
+                        'id': recommendation_id,
+                        'status': check_result['status'],
+                        'timestamp': check_result['timestamp'],
+                        'flagged_resources': check_result.get('flaggedResources', []),
+                        'resources_summary': {
+                            'resources_processed': check_result.get('resourcesSummary', {}).get('resourcesProcessed', 0),
+                            'resources_flagged': check_result.get('resourcesSummary', {}).get('resourcesFlagged', 0),
+                            'resources_ignored': check_result.get('resourcesSummary', {}).get('resourcesIgnored', 0),
+                            'resources_suppressed': check_result.get('resourcesSummary', {}).get('resourcesSuppressed', 0)
+                        },
+                        'category_summary': check_result.get('categorySpecificSummary', {})
+                    }
+                }, cls=DateTimeEncoder)
+            else:
+                raise e
+                
+    except Exception as e:
+        logger.error(f"Error getting recommendation details: {str(e)}")
+        return json.dumps({
+            'error': f'Failed to retrieve recommendation details: {str(e)}',
+            'recommendation': {},
+            'details': f'Error type: {type(e).__name__}'
+        })
+
+@tool
 def get_cost_optimization_summary() -> str:
     """
     Get a summary of all cost optimization opportunities from Trusted Advisor.
@@ -303,28 +376,24 @@ Clearly communicate when:
 - Specific checks cannot be retrieved
 """
 
-# Global agent instance - will be reinitialized for each request
-agent = None
+# Initialize the Strands agent with optimized configuration
+from strands.models.bedrock import BedrockModel
 
-def create_fresh_agent():
-    """Create a fresh agent instance to avoid state corruption."""
-    from strands.models.bedrock import BedrockModel
-    
-    # Configure optimized Bedrock model for us-east-1 region
-    trusted_advisor_model = BedrockModel(
-        region_name="us-east-1",  # Same region as Lambda for optimal performance
-        model_id="anthropic.claude-3-haiku-20240307-v1:0"  # Fast and cost-effective model
-    )
+# Configure optimized Bedrock model for us-east-1 region
+trusted_advisor_model = BedrockModel(
+    region_name="us-east-1",  # Same region as Lambda for optimal performance
+    model_id="anthropic.claude-3-haiku-20240307-v1:0"  # Fast and cost-effective model
+)
 
-    # Create agent without session to avoid state management issues
-    return Agent(
-        model=trusted_advisor_model,
-        system_prompt=TRUSTED_ADVISOR_SYSTEM_PROMPT,
-        tools=[
-            get_trusted_advisor_recommendations,
-            get_cost_optimization_summary
-        ]
-    )
+agent = Agent(
+    model=trusted_advisor_model,
+    system_prompt=TRUSTED_ADVISOR_SYSTEM_PROMPT,
+    tools=[
+        get_trusted_advisor_recommendations,
+        get_recommendation_details,
+        get_cost_optimization_summary
+    ]
+)
 
 def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     """
@@ -342,9 +411,7 @@ def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         
         # Extract query from event
         query = None
-        if 'query' in event:
-            query = event['query']
-        elif 'inputText' in event:
+        if 'inputText' in event:
             query = event['inputText']
         elif 'prompt' in event:
             query = event['prompt']
@@ -357,11 +424,8 @@ def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         
         logger.info(f"Processing query: {query}")
         
-        # Create fresh agent for each request to avoid session state issues
-        fresh_agent = create_fresh_agent()
-        
         # Process query through agent
-        response = fresh_agent(query)
+        response = agent(query)
         response_text = str(response)
         
         logger.info(f"Agent response generated successfully")
@@ -390,5 +454,5 @@ def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
                 'error': f'Failed to process request: {str(e)}',
                 'agent': 'TrustedAdvisorAgent',
                 'details': f'Error type: {type(e).__name__}'
-            })
+            }, cls=DateTimeEncoder)
         }

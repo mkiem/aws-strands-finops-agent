@@ -9,6 +9,7 @@ RUN pip install -r requirements.txt
 
 # Copy function code
 COPY lambda_handler.py ${LAMBDA_TASK_ROOT}
+COPY llm_router_simple.py ${LAMBDA_TASK_ROOT}
 COPY __init__.py ${LAMBDA_TASK_ROOT}
 
 # Set the CMD to your handler

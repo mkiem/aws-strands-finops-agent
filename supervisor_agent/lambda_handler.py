@@ -2,7 +2,8 @@ import json
 import os
 import boto3
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
+from llm_router_simple import LLMQueryRouter
 
 # Configure logging
 logger = logging.getLogger()
@@ -56,56 +57,137 @@ def extract_query(event: dict) -> Optional[str]:
     return None
 
 def get_supervisor_agent():
-    """Initialize and return the supervisor agent."""
+    """Initialize and return the intelligent supervisor agent with LLM-based routing."""
     lambda_client = boto3.client('lambda')
+    router = LLMQueryRouter()
     
-    def supervisor_agent(query: str) -> str:
-        """Process query through cost forecast and trusted advisor agents."""
+    def invoke_cost_forecast_agent(query: str) -> Dict[str, Any]:
+        """Invoke the AWS Cost Forecast Agent."""
         try:
-            # Invoke cost forecast agent
-            cost_response = lambda_client.invoke(
+            logger.info(f"Invoking cost forecast agent with query: {query}")
+            response = lambda_client.invoke(
                 FunctionName='aws-cost-forecast-agent',
                 InvocationType='RequestResponse',
                 Payload=json.dumps({"query": query})
             )
             
-            cost_payload = json.loads(cost_response['Payload'].read())
-            logger.info(f"Cost forecast response: {cost_payload}")
+            payload = json.loads(response['Payload'].read())
+            logger.info(f"Cost forecast response: {payload}")
+            return payload
             
-            # Invoke trusted advisor agent
-            advisor_response = lambda_client.invoke(
+        except Exception as e:
+            logger.error(f"Error invoking cost forecast agent: {str(e)}")
+            return {"error": f"Cost forecast agent error: {str(e)}"}
+    
+    def invoke_trusted_advisor_agent(query: str) -> Dict[str, Any]:
+        """Invoke the Trusted Advisor Agent."""
+        try:
+            logger.info(f"Invoking trusted advisor agent with query: {query}")
+            response = lambda_client.invoke(
                 FunctionName='trusted-advisor-agent-trusted-advisor-agent',
                 InvocationType='RequestResponse',
                 Payload=json.dumps({"query": query})
             )
             
-            advisor_payload = json.loads(advisor_response['Payload'].read())
-            logger.info(f"Trusted advisor response: {advisor_payload}")
+            payload = json.loads(response['Payload'].read())
+            logger.info(f"Trusted advisor response: {payload}")
+            return payload
             
-            # Combine responses
-            combined_response = "# AWS FinOps Analysis\n\n"
+        except Exception as e:
+            logger.error(f"Error invoking trusted advisor agent: {str(e)}")
+            return {"error": f"Trusted advisor agent error: {str(e)}"}
+    
+    def get_comprehensive_finops_analysis(query: str, routing_explanation: str) -> str:
+        """Get comprehensive analysis from both agents."""
+        logger.info(f"Performing comprehensive analysis for query: {query}")
+        
+        # Invoke both agents
+        cost_response = invoke_cost_forecast_agent(query)
+        advisor_response = invoke_trusted_advisor_agent(query)
+        
+        # Combine responses
+        combined_response = f"# 🏦 Comprehensive AWS FinOps Analysis\n\n{routing_explanation}\n\n"
+        
+        # Add cost analysis
+        if "body" in cost_response and not cost_response.get("error"):
+            try:
+                cost_body = json.loads(cost_response["body"]) if isinstance(cost_response["body"], str) else cost_response["body"]
+                combined_response += f"## 📊 Cost Analysis\n\n{cost_body.get('response', 'No cost data available')}\n\n"
+            except:
+                combined_response += f"## 📊 Cost Analysis\n\n{cost_response.get('body', 'No cost data available')}\n\n"
+        elif cost_response.get("error"):
+            combined_response += f"## 📊 Cost Analysis\n\n⚠️ {cost_response['error']}\n\n"
+        
+        # Add optimization recommendations
+        if "body" in advisor_response and not advisor_response.get("error"):
+            try:
+                advisor_body = json.loads(advisor_response["body"]) if isinstance(advisor_response["body"], str) else advisor_response["body"]
+                combined_response += f"## 💡 Optimization Recommendations\n\n{advisor_body.get('response', 'No recommendations available')}"
+            except:
+                combined_response += f"## 💡 Optimization Recommendations\n\n{advisor_response.get('body', 'No recommendations available')}"
+        elif advisor_response.get("error"):
+            combined_response += f"## 💡 Optimization Recommendations\n\n⚠️ {advisor_response['error']}"
+        
+        return combined_response
+    
+    def supervisor_agent(query: str) -> str:
+        """Intelligent supervisor agent with LLM-based query routing."""
+        try:
+            # Get routing decision from LLM
+            routing_decision = router.route_query(query)
+            logger.info(f"LLM routing decision: {routing_decision}")
             
-            # Add cost analysis
-            if "body" in cost_payload:
-                try:
-                    cost_body = json.loads(cost_payload["body"])
-                    combined_response += f"## Cost Analysis\n\n{cost_body.get('response', 'No cost data available')}\n\n"
-                except:
-                    combined_response += f"## Cost Analysis\n\n{cost_payload.get('body', 'No cost data available')}\n\n"
+            agents_to_invoke = routing_decision["agents"]
             
-            # Add optimization recommendations
-            if "body" in advisor_payload:
-                try:
-                    advisor_body = json.loads(advisor_payload["body"])
-                    combined_response += f"## Optimization Recommendations\n\n{advisor_body.get('response', 'No recommendations available')}"
-                except:
-                    combined_response += f"## Optimization Recommendations\n\n{advisor_payload.get('body', 'No recommendations available')}"
+            # Handle "both" routing decision by converting to explicit agent list
+            if "both" in agents_to_invoke:
+                agents_to_invoke = ["cost_forecast", "trusted_advisor"]
             
-            return combined_response
+            routing_explanation = router.get_routing_explanation(query, routing_decision)
+            
+            # Handle "both" routing decision
+            if "both" in agents_to_invoke:
+                agents_to_invoke = ["cost_forecast", "trusted_advisor"]
+            
+            # Route to appropriate agent(s) based on LLM decision
+            if len(agents_to_invoke) == 1:
+                # Single agent routing
+                if "cost_forecast" in agents_to_invoke:
+                    logger.info("LLM routed to Cost Forecast Agent only")
+                    response = invoke_cost_forecast_agent(query)
+                    
+                    # Extract response content
+                    if "body" in response and not response.get("error"):
+                        try:
+                            body = json.loads(response["body"]) if isinstance(response["body"], str) else response["body"]
+                            return f"# 📊 AWS Cost Analysis\n\n{routing_explanation}\n\n{body.get('response', 'No cost data available')}"
+                        except:
+                            return f"# 📊 AWS Cost Analysis\n\n{routing_explanation}\n\n{response.get('body', 'No cost data available')}"
+                    else:
+                        return f"# 📊 AWS Cost Analysis\n\n{routing_explanation}\n\n⚠️ {response.get('error', 'Unknown error occurred')}"
+                
+                elif "trusted_advisor" in agents_to_invoke:
+                    logger.info("LLM routed to Trusted Advisor Agent only")
+                    response = invoke_trusted_advisor_agent(query)
+                    
+                    # Extract response content
+                    if "body" in response and not response.get("error"):
+                        try:
+                            body = json.loads(response["body"]) if isinstance(response["body"], str) else response["body"]
+                            return f"# 💡 AWS Optimization Recommendations\n\n{routing_explanation}\n\n{body.get('response', 'No recommendations available')}"
+                        except:
+                            return f"# 💡 AWS Optimization Recommendations\n\n{routing_explanation}\n\n{response.get('body', 'No recommendations available')}"
+                    else:
+                        return f"# 💡 AWS Optimization Recommendations\n\n{routing_explanation}\n\n⚠️ {response.get('error', 'Unknown error occurred')}"
+            
+            else:
+                # Multiple agent routing (comprehensive analysis)
+                logger.info("LLM routed to both agents for comprehensive analysis")
+                return get_comprehensive_finops_analysis(query, routing_explanation)
             
         except Exception as e:
             logger.error(f"Error in supervisor agent: {str(e)}")
-            return f"Error processing query: {str(e)}"
+            return f"# ⚠️ Error\n\nError processing query: {str(e)}"
     
     return supervisor_agent
 

@@ -4,7 +4,7 @@ import os
 from typing import Dict, Any
 from datetime import datetime
 
-from strands import Agent, tool
+from strands import Agent, Session, tool
 import boto3
 from botocore.exceptions import ClientError
 
@@ -307,8 +307,11 @@ Clearly communicate when:
 agent = None
 
 def create_fresh_agent():
-    """Create a fresh agent instance to avoid state corruption."""
+    """Create a fresh agent instance with new session to avoid state corruption."""
     from strands.models.bedrock import BedrockModel
+    
+    # Create fresh session for each request
+    session = Session()
     
     # Configure optimized Bedrock model for us-east-1 region
     trusted_advisor_model = BedrockModel(
@@ -316,10 +319,10 @@ def create_fresh_agent():
         model_id="anthropic.claude-3-haiku-20240307-v1:0"  # Fast and cost-effective model
     )
 
-    # Create agent without session to avoid state management issues
     return Agent(
         model=trusted_advisor_model,
         system_prompt=TRUSTED_ADVISOR_SYSTEM_PROMPT,
+        session=session,  # Fresh session for each request
         tools=[
             get_trusted_advisor_recommendations,
             get_cost_optimization_summary

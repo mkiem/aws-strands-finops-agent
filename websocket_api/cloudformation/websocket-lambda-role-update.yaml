@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Update IAM Role for WebSocket Lambda Functions - Add Supervisor Agent Invoke Permission'
+
+Parameters:
+  RoleName:
+    Type: String
+    Default: finops-websocket-lambda-role
+    Description: Name of the existing WebSocket Lambda role
+
+Resources:
+  SupervisorInvokePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: SupervisorAgentInvokePolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - lambda:InvokeFunction
+              - lambda:InvokeAsync
+            Resource:
+              - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:AWS-FinOps-Agent'
+              - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:AWS-FinOps-Agent:*'
+      Roles:
+        - !Ref RoleName
+
+Outputs:
+  PolicyArn:
+    Description: ARN of the created policy
+    Value: !Ref SupervisorInvokePolicy

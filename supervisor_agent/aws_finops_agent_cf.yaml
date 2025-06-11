@@ -163,7 +163,6 @@ Resources:
           - 'X-Amz-Security-Token'
         AllowMethods: 
           - 'POST'
-          - 'OPTIONS'
         AllowOrigins: 
           - 'https://staging.da7jmqelobr5a.amplifyapp.com'
           - 'http://localhost:3000'  # For local development

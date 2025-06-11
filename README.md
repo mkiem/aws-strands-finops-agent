@@ -1,6 +1,6 @@
 # FinOps Agent
 
-A Lambda-based agent built with Strands SDK to assist with FinOps tasks.
+A Lambda-based agent built with Strands SDK to assist with FinOps tasks, with integrated MCP server support for enhanced automation capabilities.
 
 ## Project Structure
 
@@ -12,13 +12,70 @@ finopsAgent/
 │   ├── requirements.txt
 │   ├── build_lambda_package.sh
 │   └── finops_agent_cf.yaml
+├── trusted_advisor_agent/
+│   ├── __init__.py
+│   ├── lambda_handler.py
+│   ├── trusted_advisor_tools.py
+│   ├── requirements.txt
+│   ├── build_lambda_package.sh
+│   ├── trusted_advisor_cf.yaml
+│   └── README.md
 ├── finops-ui/
 │   ├── src/
 │   │   ├── App.js
+│   │   ├── components/
+│   │   │   ├── FinOpsResponse.jsx
+│   │   │   └── FinOpsResponse.css
 │   │   └── ...
 │   └── ...
 └── README.md
 ```
+
+## Strands SDK Documentation
+
+This project includes comprehensive Strands SDK documentation extracted from the official website:
+
+- **[STRANDS_SDK_GUIDE.md](STRANDS_SDK_GUIDE.md)**: Complete LLM-friendly guide with examples and best practices
+- **[STRANDS_QUICK_REFERENCE.md](STRANDS_QUICK_REFERENCE.md)**: Quick reference for common patterns and code snippets
+- **[STRANDS_SDK_README.md](STRANDS_SDK_README.md)**: Full extracted documentation from strandsagents.com
+- **[strands_documentation_raw.json](strands_documentation_raw.json)**: Raw scraped data for further processing
+
+### Documentation Scraper (`strands_doc_scraper/`)
+Python application that recursively crawls the Strands documentation website to create LLM-friendly documentation. Run with:
+
+```bash
+cd strands_doc_scraper
+./run_scraper.sh
+```
+
+## Components
+
+### Main FinOps Agent (`my_agent/`)
+The core agent that handles cost analysis, optimization recommendations, and AWS service interactions. Built with Strands SDK and provides:
+
+- AWS Cost Explorer integration
+- Cost analysis and forecasting
+- General FinOps recommendations
+- Integration with other AWS services
+
+### Trusted Advisor Agent (`trusted_advisor_agent/`)
+A specialized Strands-based agent that provides cost optimization recommendations from AWS Trusted Advisor. Features:
+
+- Real-time cost optimization recommendations
+- Support for both new TrustedAdvisor API and legacy Support API
+- Detailed resource-level analysis
+- Exact savings calculations without rounding
+- Reusable by other agents
+
+See `trusted_advisor_agent/README.md` for detailed documentation.
+
+### Web UI (`finops-ui/`)
+React-based frontend for interacting with the FinOps agents. Provides:
+
+- Cost analysis visualization
+- Recommendation display
+- Authentication via Cognito
+- API Gateway integration
 
 ## Setup and Deployment
 
@@ -139,31 +196,75 @@ aws apigateway create-deployment \
   --stage-name prod
 ```
 
-### Lambda Response Format for API Gateway
+## Web UI
 
-For the Lambda function to work correctly with API Gateway, it must return responses in the following format:
+The web UI is deployed using AWS Amplify and can be accessed at the following URL:
 
-```python
-{
-    'statusCode': 200,
-    'headers': {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'
-    },
-    'body': json.dumps({
-        'query': query,
-        'response': response_text
-    })
-}
+- **URL**: [https://staging.da7jmqelobr5a.amplifyapp.com](https://staging.da7jmqelobr5a.amplifyapp.com)
+- **App ID**: da7jmqelobr5a
+- **Branch**: staging
+
+### Authentication
+
+The UI uses Amazon Cognito for authentication:
+
+- **User Pool ID**: us-east-1_DQpPM15TX
+- **App Client ID**: 4evk2m4ru8rrenij1ukg0044k6
+- **Test User**: testuser / SecurePassword123!
+
+### UI Features
+
+The UI includes:
+
+1. Authentication using Amazon Cognito
+2. Query input form for asking FinOps questions
+3. Formatted response display with:
+   - Cost summary card
+   - Markdown rendering
+   - Structured content blocks
+4. Query history tracking
+
+### Deploying UI Updates
+
+To deploy updates to the UI:
+
+1. Make changes to the React components
+2. Build the application:
+
+```bash
+cd finops-ui
+npm run build
 ```
+
+3. Create a zip file of the build:
+
+```bash
+zip -r finops-ui-build.zip build
+```
+
+4. Upload to S3:
+
+```bash
+aws s3 cp finops-ui-build.zip s3://finops-deployment-packages-062025/finops-ui-build.zip
+```
+
+5. Deploy to Amplify:
+
+```bash
+aws amplify start-deployment \
+  --app-id da7jmqelobr5a \
+  --branch-name staging \
+  --source-url s3://finops-deployment-packages-062025/finops-ui-build.zip
+```
+
+⚠️ **IMPORTANT**: When creating the deployment package, ensure all files are at the root level of the zip file, NOT inside a subdirectory. See `amplify-deployment-guide.md` for detailed instructions.
 
 ## Usage
 
-Once deployed, you can invoke the Lambda function directly or through the API Gateway endpoint:
+Once deployed, you can access the FinOps Agent through:
 
-### Direct Lambda Invocation
+1. **Web UI**: Visit the Amplify URL and log in with your credentials
+2. **Direct Lambda Invocation**:
 
 ```bash
 aws lambda invoke \
@@ -172,36 +273,69 @@ aws lambda invoke \
   response.json
 ```
 
-### API Gateway
+3. **API Gateway**:
 
 ```bash
 curl -X POST \
-  https://YOUR_API_ID.execute-api.REGION.amazonaws.com/prod/query \
+  https://71mmhvzkuh.execute-api.us-east-1.amazonaws.com/prod/query \
   -H 'Content-Type: application/json' \
   -d '{"query": "What is the current AWS spend?"}'
 ```
 
-### Web UI
+## Deployed Resources
 
-The web UI is deployed using AWS Amplify and can be accessed at the provided Amplify URL. The UI communicates with the Lambda function through the API Gateway endpoint.
-
-## Key Learnings and Best Practices
-
-1. **Lambda Proxy Integration**: When using Lambda proxy integration with API Gateway, the Lambda function must return responses in a specific format that includes `statusCode`, `headers`, and a string `body`.
-
-2. **CORS Headers**: Include CORS headers in the Lambda response to allow browser-based applications to access the API.
-
-3. **Error Handling**: Implement proper error handling in the Lambda function to provide meaningful error messages to clients.
-
-4. **Event Structure**: API Gateway sends events to Lambda with a specific structure, where the request body is in the `body` field. The Lambda function must parse this correctly.
-
-5. **JSON Serialization**: The `body` field in the Lambda response must be a string, so use `json.dumps()` to serialize the response.
-
-6. **Testing**: Test the API Gateway endpoint directly before integrating with the UI to ensure it works correctly.
-
-## Customization
-
-To extend the agent's capabilities:
-1. Add new tools to the agent initialization in `my_agent/lambda_handler.py`
-2. Update the IAM permissions in `my_agent/finops_agent_cf.yaml` as needed
-3. Rebuild and redeploy the Lambda package
+- **Lambda Function**: finops-agent
+- **API Gateway**: 71mmhvzkuh.execute-api.us-east-1.amazonaws.com/prod
+- **Amplify App**: staging.da7jmqelobr5a.amplifyapp.com
+- **AWS Cost Forecast Agent**: aws-cost-forecast-agent
+  - **Status**: ✅ Successfully deployed and functional
+  - **Function ARN**: arn:aws:lambda:us-east-1:837882009522:function:aws-cost-forecast-agent
+  - **CloudFormation Stack**: aws-cost-forecast-agent
+  - **S3 Package**: s3://finops-deployment-packages-062025/aws_cost_forecast_agent_lambda.zip
+  - **Runtime**: Python 3.10 with Lambda layer for dependencies
+  - **Last Updated**: 2025-06-10 (Renamed from finops-agent)
+- **Trusted Advisor Agent**: trusted-advisor-agent-trusted-advisor-agent (Strands-based cost optimization agent)
+  - **Status**: ✅ Successfully deployed and fully functional
+  - **Function ARN**: arn:aws:lambda:us-east-1:837882009522:function:trusted-advisor-agent-trusted-advisor-agent
+  - **CloudFormation Stack**: trusted-advisor-agent
+  - **S3 Package**: s3://finops-deployment-packages-062025/trusted_advisor_agent_lambda.zip
+  - **API Integration**: ✅ AWS Trusted Advisor API working (retrieves warning/error recommendations)
+  - **Data Validation**: ✅ Successfully retrieving 5 cost optimization recommendations ($247.97 monthly savings)
+  - **Last Updated**: 2025-06-10 (Fixed datetime serialization and API parameter issues)
+- **AWS FinOps Supervisor Agent**: AWS-FinOps-Agent
+- **AWS FinOps Supervisor Agent**: AWS-FinOps-Agent
+  - **Status**: ✅ Successfully deployed with private Function URL and IAM authentication
+  - **Function ARN**: arn:aws:lambda:us-east-1:837882009522:function:AWS-FinOps-Agent
+  - **CloudFormation Stack**: aws-finops-supervisor-agent
+  - **Container Image**: 837882009522.dkr.ecr.us-east-1.amazonaws.com/aws-finops-agent:latest
+  - **ECR Repository**: aws-finops-agent
+  - **API Gateway Endpoint**: https://mdog752949.execute-api.us-east-1.amazonaws.com/prod/query (legacy fallback)
+  - **Private Function URL**: https://bybfgjmve5b5m4baexntp62d3e0dqjty.lambda-url.us-east-1.on.aws/ ✅ **PRIVATE (IAM AUTH)**
+  - **API Gateway ID**: mdog752949
+  - **Runtime**: Python 3.11 container image with Strands SDK dependencies
+  - **Memory**: 512MB, Timeout: 300 seconds (5 minutes for agent orchestration)
+  - **Deployment Method**: Container-based Lambda (up to 10GB vs 250MB zip limit)
+  - **Authentication**: AWS_IAM with Cognito Identity Pool integration
+  - **Architecture**: Supervisor agent orchestrates aws-cost-forecast-agent and trusted-advisor-agent
+  - **Current Status**: Private Function URL with signed requests (company policy compliant)
+  - **Benefits**: No timeout limitations, private access only, IAM-based security
+  - **Frontend Features**: Toggle between private Function URL and legacy API Gateway
+  - **Last Updated**: 2025-06-11 (Implemented private Function URL with IAM authentication)
+- **WebSocket API for FinOps Agent**: finops-websocket-api
+  - **Status**: ✅ **FULLY FUNCTIONAL** - Overcomes 30-second timeout limitation
+  - **CloudFormation Stack**: finops-websocket-api
+  - **WebSocket API ID**: rtswivmeqj
+  - **WebSocket Endpoint**: wss://rtswivmeqj.execute-api.us-east-1.amazonaws.com/prod ✅ **ACTIVE**
+  - **Architecture**: Real-time bidirectional communication with progress updates
+  - **Components**:
+    - **Connection Manager**: finops-websocket-connection-manager (handles connect/disconnect)
+    - **Message Handler**: finops-websocket-message-handler (processes queries, queues jobs)
+    - **Background Processor**: finops-websocket-background-processor (15-minute execution limit)
+    - **DynamoDB Tables**: finops-websocket-connections, finops-websocket-jobs
+    - **SQS Queue**: finops-websocket-processing-queue (with DLQ)
+  - **Benefits**: No timeout limitations, real-time progress updates, scalable job processing
+  - **Frontend Integration**: ✅ **WORKING** - Real-time WebSocket communication with fallback
+  - **Authentication**: Post-connection authentication via WebSocket messages
+  - **Performance**: Successfully processes complex FinOps queries with supervisor agent orchestration
+  - **User Experience**: Real-time progress (5% → 30% → 60% → 90% → 100%) with full response display
+  - **Last Updated**: 2025-06-11 ✅ **PRODUCTION READY** - All issues resolved, fully functional

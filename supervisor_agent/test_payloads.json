@@ -1,0 +1,26 @@
+{
+  "simple_query": {
+    "query": "What are my current AWS costs and optimization opportunities?"
+  },
+  
+  "cost_analysis_query": {
+    "query": "Provide detailed cost analysis for this month"
+  },
+  
+  "optimization_query": {
+    "query": "What cost optimization recommendations do you have?"
+  },
+  
+  "comprehensive_analysis": {
+    "query": "Give me a comprehensive FinOps analysis including current costs and savings opportunities"
+  },
+  
+  "api_gateway_format": {
+    "body": "{\"query\": \"What are my AWS costs for June 2025?\"}"
+  },
+  
+  "alternative_formats": {
+    "inputText": "Show me cost optimization recommendations",
+    "prompt": "Analyze my AWS spending patterns"
+  }
+}

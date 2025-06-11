@@ -1,0 +1,143 @@
+.finops-response-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.query-section {
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.query-section h3 {
+  color: #495057;
+  font-size: 1.1rem;
+  margin-bottom: 8px;
+}
+
+.query-section p {
+  color: #212529;
+  font-weight: 500;
+  font-size: 1.2rem;
+}
+
+.cost-summary-card {
+  background: linear-gradient(135deg, #0066cc 0%, #0099ff 100%);
+  color: white;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 20px 0;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.service-name {
+  font-size: 1.2rem;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.cost-amount {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 10px 0;
+}
+
+.time-period {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.response-section {
+  padding: 10px 0;
+  line-height: 1.6;
+}
+
+/* Markdown styling */
+.response-section h1 {
+  color: #0066cc;
+  font-size: 1.8rem;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.response-section h2 {
+  color: #212529;
+  font-size: 1.5rem;
+  margin: 24px 0 16px;
+}
+
+.response-section h3 {
+  color: #495057;
+  font-size: 1.3rem;
+  margin: 20px 0 12px;
+}
+
+.response-section ul, 
+.response-section ol {
+  padding-left: 24px;
+  margin: 16px 0;
+}
+
+.response-section li {
+  margin-bottom: 8px;
+}
+
+.response-section hr {
+  border: 0;
+  height: 1px;
+  background-color: #dee2e6;
+  margin: 24px 0;
+}
+
+.response-section strong {
+  font-weight: 600;
+}
+
+.response-section pre {
+  background-color: #f1f1f1;
+  padding: 10px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 16px 0;
+}
+
+.response-section code {
+  background-color: #f1f1f1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-family: monospace;
+}
+
+.response-section table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 16px 0;
+}
+
+.response-section th,
+.response-section td {
+  border: 1px solid #dee2e6;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.response-section th {
+  background-color: #f1f1f1;
+  font-weight: 600;
+}
+
+.response-section tr:nth-child(even) {
+  background-color: #f8f9fa;
+}
+
+.response-section blockquote {
+  border-left: 4px solid #0066cc;
+  padding-left: 16px;
+  margin-left: 0;
+  color: #495057;
+}

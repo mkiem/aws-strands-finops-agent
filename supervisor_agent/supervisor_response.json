@@ -1,0 +1,1 @@
+{"errorMessage": "Unable to marshal response: Object of type generator is not JSON serializable", "errorType": "Runtime.MarshalError", "requestId": "fb53fd5e-6d6d-4b81-8c27-d8270fa89075", "stackTrace": []}

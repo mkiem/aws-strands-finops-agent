@@ -340,9 +340,11 @@ curl -X POST \
   - **User Experience**: Real-time progress (5% → 30% → 60% → 90% → 100%) with full response display
 - **Budget Management Agent**: budget-management-agent
   - **Status**: ✅ **DEPLOYED** - Proactive cost control and governance
-  - **Function**: budget-management-agent
-  - **Runtime**: Python 3.11 with Strands SDK
+  - **Function ARN**: arn:aws:lambda:us-east-1:837882009522:function:budget-management-agent
+  - **CloudFormation Stack**: budget-management-agent
+  - **Runtime**: Python 3.11 with Strands SDK (15.3 MiB package)
   - **Framework**: Strands Agent with Claude 3.5 Haiku
+  - **Memory**: 512MB, Timeout: 300 seconds (5 minutes)
   - **Capabilities**: 
     - Automated budget creation and monitoring
     - Budget performance analysis and recommendations  
@@ -350,6 +352,9 @@ curl -X POST \
     - Proactive cost control through budget actions
     - Integration with Cost Explorer for recommendations
   - **Tools**: get_budget_analysis, get_budget_recommendations, create_budget, monitor_budget_alerts, get_budget_performance_history
-  - **CloudFormation Stack**: budget-management-agent
-  - **S3 Package**: s3://finops-deployment-packages-062025/budget-management-agent.zip
-  - **Last Updated**: 2025-06-11 (Created new microservice using Strands framework)
+  - **DynamoDB Table**: budget-management-state (PAY_PER_REQUEST)
+  - **IAM Roles**: 
+    - budget-management-lambda-role (Lambda execution)
+    - budget-management-action-execution-role (Budget actions)
+  - **CloudWatch Logs**: /aws/lambda/budget-management-agent
+  - **Last Updated**: 2025-06-11 ✅ **PRODUCTION READY** - Successfully deployed and ready for testing

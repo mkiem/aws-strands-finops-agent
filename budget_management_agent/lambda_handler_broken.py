@@ -1,23 +1,31 @@
+"""
+AWS Budget Management Agent - FIXED VERSION
+Built with Strands SDK for comprehensive budget management and cost control
+Uses Claude 3.5 Haiku via Strands framework - CORRECTLY IMPLEMENTED
+"""
+
 import json
-from strands import Agent
-from strands_tools import calculator, current_time
 import boto3
 import os
 import logging
 from datetime import datetime, timedelta
-from strands import tool
-from typing import Dict, Any, List
+from typing import Dict, List, Any, Optional
+
+from strands import Agent, tool
+from strands_tools import calculator, current_time
 
 # Configure logging
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
 
 # Initialize AWS clients
 budgets_client = boto3.client('budgets')
 ce_client = boto3.client('ce')
+
+# Environment variables
 ACCOUNT_ID = os.environ.get('AWS_ACCOUNT_ID')
 
-# System prompt for Budget Management Agent
+# System prompt for the Budget Management Agent
 BUDGET_MANAGEMENT_SYSTEM_PROMPT = """
 You are an AWS Budget Management Agent specialized in proactive cost control and governance.
 
@@ -276,11 +284,11 @@ def get_cost_data_for_recommendations() -> Dict[str, Dict]:
         return {}
 
 def lambda_handler(event, context):
-    """Lambda handler function using Strands Agent framework - EXACTLY like cost-forecast agent"""
+    """Lambda handler function using Strands Agent framework - CORRECTLY IMPLEMENTED"""
     try:
-        logger.info(f"Received event: {event}")
+        logger.info(f"Budget Management Agent invoked with event: {json.dumps(event)}")
         
-        # Extract query from the event - EXACTLY like cost-forecast agent
+        # Extract query from the event
         query = None
         
         # Check if the event is from API Gateway
@@ -295,11 +303,6 @@ def lambda_handler(event, context):
                 query = body.get('query', '')
             except Exception as e:
                 logger.error(f"Error parsing request body: {str(e)}")
-                error_blocks = [
-                    {"text": "# Error Processing Request\n\n"},
-                    {"text": f"I encountered an error while parsing your request: {str(e)}\n\n"},
-                    {"text": "Please ensure your request is properly formatted."}
-                ]
                 return {
                     'statusCode': 400,
                     'headers': {
@@ -310,19 +313,17 @@ def lambda_handler(event, context):
                     },
                     'body': json.dumps({
                         'error': f"Invalid request format: {str(e)}",
-                        'response': error_blocks
+                        'agent': 'BudgetManagementAgent'
                     })
                 }
         # Direct Lambda invocation
         elif 'query' in event:
             query = event['query']
+        # Supervisor agent invocation
+        elif 'action' in event:
+            query = event.get('parameters', {}).get('query', 'Analyze current budget status')
         
         if not query:
-            error_blocks = [
-                {"text": "# Missing Query\n\n"},
-                {"text": "No query was provided in your request.\n\n"},
-                {"text": "Please provide a question about AWS budgets or cost management."}
-            ]
             return {
                 'statusCode': 400,
                 'headers': {
@@ -333,23 +334,28 @@ def lambda_handler(event, context):
                 },
                 'body': json.dumps({
                     'error': 'No query provided in the request',
-                    'response': error_blocks
+                    'agent': 'BudgetManagementAgent'
                 })
             }
         
-        # Initialize the agent with tools - EXACTLY like cost-forecast agent
+        # Initialize the Strands agent with tools - CORRECT IMPLEMENTATION
         budget_agent = Agent(
             system_prompt=BUDGET_MANAGEMENT_SYSTEM_PROMPT,
-            tools=[calculator, current_time, get_budget_analysis, get_budget_recommendations],
+            tools=[
+                calculator, 
+                current_time, 
+                get_budget_analysis,
+                get_budget_recommendations
+            ],
         )
         
-        # Process the query - EXACTLY like cost-forecast agent
-        logger.info(f"Processing query: {query}")
+        # Process the query using Claude 3.5 Haiku via Strands - LET STRANDS HANDLE THE RESPONSE
+        logger.info(f"Processing budget query: {query}")
         agent_result = budget_agent(query)
-        response_text = str(agent_result)
-        logger.info(f"Agent response: {response_text}")
+        response_text = str(agent_result)  # This is the natural language response from Claude
+        logger.info(f"Budget Agent response generated")
         
-        # Format the response - EXACTLY like cost-forecast agent
+        # Return the natural language response from Claude, not raw JSON
         formatted_response = {
             'statusCode': 200,
             'headers': {
@@ -360,19 +366,18 @@ def lambda_handler(event, context):
             },
             'body': json.dumps({
                 'query': query,
-                'response': response_text
+                'response': response_text,  # Natural language response from Claude
+                'agent': 'BudgetManagementAgent',
+                'status': 'success',
+                'timestamp': datetime.utcnow().isoformat()
             })
         }
         
+        logger.info("Budget Management Agent completed successfully")
         return formatted_response
         
     except Exception as e:
-        logger.error(f"Error processing request: {str(e)}")
-        error_blocks = [
-            {"text": "# Error Processing Request\n\n"},
-            {"text": f"I encountered an error while processing your request: {str(e)}\n\n"},
-            {"text": "Please try again or contact support if the issue persists."}
-        ]
+        logger.error(f"Budget Management Agent error: {str(e)}")
         return {
             'statusCode': 500,
             'headers': {
@@ -383,6 +388,8 @@ def lambda_handler(event, context):
             },
             'body': json.dumps({
                 'error': str(e),
-                'response': error_blocks
+                'agent': 'BudgetManagementAgent',
+                'status': 'error',
+                'timestamp': datetime.utcnow().isoformat()
             })
         }

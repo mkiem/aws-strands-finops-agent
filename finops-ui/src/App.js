@@ -285,9 +285,15 @@ function App({ signOut, user }) {
     <div className="App">
       <header className="App-header">
         <div className="header-content">
-          <h1>🏦 AWS FinOps Agent</h1>
+          <div className="header-main">
+            <div className="header-icon">💰</div>
+            <div className="header-text">
+              <h1>AWS FinOps Agent</h1>
+              <p className="header-subtitle">Intelligent Financial Operations & Cost Optimization</p>
+            </div>
+          </div>
           <div className="user-info">
-            <span>Welcome, {user.username}!</span>
+            <span className="welcome-text">Welcome, {user.username}!</span>
             <button onClick={signOut} className="sign-out-btn">Sign out</button>
           </div>
         </div>
@@ -295,59 +301,39 @@ function App({ signOut, user }) {
 
       <main className="App-main">
         <div className="query-section">
-          <form onSubmit={onSubmit} className="query-form">
-            <div className="input-group">
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Ask about your AWS costs, optimization opportunities, or financial insights..."
-                className="query-input"
-                disabled={loading}
-              />
-              <button 
-                type="submit" 
-                className="submit-btn"
-                disabled={loading || !query.trim()}
-              >
-                {loading ? '🔄 Analyzing...' : '📊 Analyze'}
-              </button>
-            </div>
-          </form>
-          
-          <div className="endpoint-selector">
-            <label>
-              <input
-                type="checkbox"
-                checked={useWebSocket}
-                onChange={(e) => setUseWebSocket(e.target.checked)}
-              />
-              Use WebSocket API - Real-time Updates, No Timeout Limits
-            </label>
-            <div className="connection-status">
-              {useWebSocket ? (
-                <div>
-                  <small>
-                    {wsStatus === 'CONNECTED' && '✅ WebSocket: Connected - Real-time updates active'}
-                    {wsStatus === 'CONNECTING' && '🔄 WebSocket: Connecting...'}
-                    {wsStatus === 'RECONNECTING' && `🔄 WebSocket: Reconnecting (${reconnectionInfo.attempts}/${reconnectionInfo.maxAttempts})...`}
-                    {wsStatus === 'DISCONNECTED' && '⚠️ WebSocket: Disconnected - Will auto-reconnect on next query'}
-                    {wsStatus === 'FAILED' && '❌ WebSocket: Connection failed - Using REST API fallback'}
-                  </small>
-                  {(wsStatus === 'DISCONNECTED' || wsStatus === 'FAILED') && (
-                    <button 
-                      onClick={handleManualReconnect} 
-                      className="reconnect-btn"
-                      disabled={isReconnecting}
-                    >
-                      {isReconnecting ? 'Reconnecting...' : 'Reconnect Now'}
-                    </button>
-                  )}
+          <div className="query-container">
+            <h2 className="query-title">What would you like to analyze?</h2>
+            <form onSubmit={onSubmit} className="query-form">
+              <div className="input-group">
+                <div className="input-wrapper">
+                  <textarea
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Ask about your AWS costs, optimization opportunities, budget forecasts, or financial insights..."
+                    className="query-input"
+                    disabled={loading}
+                    rows="3"
+                  />
+                  <button 
+                    type="submit" 
+                    className="submit-btn"
+                    disabled={loading || !query.trim()}
+                  >
+                    {loading ? (
+                      <>
+                        <span className="btn-spinner"></span>
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <span className="btn-icon">🚀</span>
+                        Analyze Now
+                      </>
+                    )}
+                  </button>
                 </div>
-              ) : (
-                <small>⚠️ Using legacy API Gateway (29s timeout limit)</small>
-              )}
-            </div>
+              </div>
+            </form>
           </div>
         </div>
 
@@ -386,6 +372,44 @@ function App({ signOut, user }) {
           </div>
         )}
       </main>
+
+      {/* WebSocket Status Footer */}
+      <footer className="websocket-footer">
+        <div className="endpoint-selector">
+          <label>
+            <input
+              type="checkbox"
+              checked={useWebSocket}
+              onChange={(e) => setUseWebSocket(e.target.checked)}
+            />
+            <span className="checkbox-label">Use WebSocket API - Real-time Updates, No Timeout Limits</span>
+          </label>
+          <div className="connection-status">
+            {useWebSocket ? (
+              <div>
+                <small className={`status-indicator ${wsStatus.toLowerCase()}`}>
+                  {wsStatus === 'CONNECTED' && '✅ WebSocket: Connected - Real-time updates active'}
+                  {wsStatus === 'CONNECTING' && '🔄 WebSocket: Connecting...'}
+                  {wsStatus === 'RECONNECTING' && `🔄 WebSocket: Reconnecting (${reconnectionInfo.attempts}/${reconnectionInfo.maxAttempts})...`}
+                  {wsStatus === 'DISCONNECTED' && '⚠️ WebSocket: Disconnected - Will auto-reconnect on next query'}
+                  {wsStatus === 'FAILED' && '❌ WebSocket: Connection failed - Using REST API fallback'}
+                </small>
+                {(wsStatus === 'DISCONNECTED' || wsStatus === 'FAILED') && (
+                  <button 
+                    onClick={handleManualReconnect} 
+                    className="reconnect-btn"
+                    disabled={isReconnecting}
+                  >
+                    {isReconnecting ? 'Reconnecting...' : 'Reconnect Now'}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <small className="status-indicator legacy">⚠️ Using legacy API Gateway (29s timeout limit)</small>
+            )}
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

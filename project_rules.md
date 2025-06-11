@@ -3,6 +3,7 @@ The following project rules is pre-pended to the user prompt.
 - Use Strands SDK as the core development framework, refer to the STRANDS_SDK_README.md, STRANDS_SDK_GUIDE.md, and STRANDS_QUICK_REFERENCE.md at the root project directory
 - Use Python 3.10 and above when developing in Python
 - Adhere to usage of Material UI for our front-end - https://mui.com/material-ui/ 
+- When building FinOps-UI, always package all files at the ROOT, do not include in a BUILD folder.
 - Do not change user interface unless explicity told to do so. When updating UI, only make changes that interact with the back-end unless otherwise stated. 
 - Use Puppeteer MCP server for testing front-end deployments, making use of console logs and screenshots to resolve issues.
 - When building a deployment package, always keep it in the same folder as the main application file project folder

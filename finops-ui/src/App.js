@@ -309,7 +309,15 @@ function App({ signOut, user }) {
                   <textarea
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Ask about your AWS costs, optimization opportunities, budget forecasts, or financial insights..."
+                    onKeyDown={(e) => {
+                      if (e.ctrlKey && e.key === 'Enter') {
+                        e.preventDefault();
+                        if (!loading && query.trim()) {
+                          onSubmit(e);
+                        }
+                      }
+                    }}
+                    placeholder="Ask about your AWS costs, optimization opportunities, budget forecasts, or financial insights... (Ctrl+Enter to analyze)"
                     className="query-input"
                     disabled={loading}
                     rows="3"
@@ -373,8 +381,8 @@ function App({ signOut, user }) {
         )}
       </main>
 
-      {/* WebSocket Status Footer */}
-      <footer className="websocket-footer">
+      {/* WebSocket Status Section */}
+      <div className="websocket-section">
         <div className="endpoint-selector">
           <label>
             <input
@@ -409,7 +417,7 @@ function App({ signOut, user }) {
             )}
           </div>
         </div>
-      </footer>
+      </div>
     </div>
   );
 }

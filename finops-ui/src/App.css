@@ -167,8 +167,9 @@
     width: 100%;
   }
   
-  .websocket-footer {
-    padding: 12px 15px;
+  .websocket-section {
+    margin-top: 30px;
+    padding: 15px;
   }
 }
 /* Enhanced Header Styles */
@@ -423,23 +424,18 @@
   100% { transform: rotate(360deg); }
 }
 
-/* WebSocket Footer */
-.websocket-footer {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+/* WebSocket Status Section (Bottom of Page) */
+.websocket-section {
+  margin-top: 40px;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
-  padding: 15px 20px;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 15px;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
 }
 
 .endpoint-selector {
-  max-width: 1000px;
-  margin: 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -534,7 +530,7 @@
 
 /* Add bottom padding to main content to account for fixed footer */
 .App-main {
-  padding-bottom: 100px;
+  margin-bottom: 20px;
 }
 
 /* Enhanced Progress Section */

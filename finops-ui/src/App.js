@@ -303,6 +303,7 @@ function App({ signOut, user }) {
         <div className="query-section">
           <div className="query-container">
             <h2 className="query-title">What would you like to analyze?</h2>
+            
             <form onSubmit={onSubmit} className="query-form">
               <div className="input-group">
                 <div className="input-wrapper">

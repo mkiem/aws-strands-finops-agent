@@ -97,36 +97,83 @@ def get_supervisor_agent():
             logger.error(f"Error invoking trusted advisor agent: {str(e)}")
             return {"error": f"Trusted advisor agent error: {str(e)}"}
     
-    def get_comprehensive_finops_analysis(query: str, routing_explanation: str) -> str:
-        """Get comprehensive analysis from both agents."""
-        logger.info(f"Performing comprehensive analysis for query: {query}")
+    def invoke_budget_management_agent(query: str) -> Dict[str, Any]:
+        """Invoke the Budget Management Agent."""
+        try:
+            logger.info(f"Invoking budget management agent with query: {query}")
+            response = lambda_client.invoke(
+                FunctionName='budget-management-agent',
+                InvocationType='RequestResponse',
+                Payload=json.dumps({"query": query})
+            )
+            
+            payload = json.loads(response['Payload'].read())
+            logger.info(f"Budget management response: {payload}")
+            return payload
+            
+        except Exception as e:
+            logger.error(f"Error invoking budget management agent: {str(e)}")
+            return {"error": f"Budget management agent error: {str(e)}"}
+    
+    def get_comprehensive_finops_analysis(query: str, routing_explanation: str, agents_to_invoke: List[str]) -> str:
+        """Get comprehensive analysis from selected agents."""
+        logger.info(f"Performing comprehensive analysis for query: {query} with agents: {agents_to_invoke}")
         
-        # Invoke both agents
-        cost_response = invoke_cost_forecast_agent(query)
-        advisor_response = invoke_trusted_advisor_agent(query)
-        
-        # Combine responses
         combined_response = f"# 🏦 Comprehensive AWS FinOps Analysis\n\n{routing_explanation}\n\n"
         
-        # Add cost analysis
-        if "body" in cost_response and not cost_response.get("error"):
-            try:
-                cost_body = json.loads(cost_response["body"]) if isinstance(cost_response["body"], str) else cost_response["body"]
-                combined_response += f"## 📊 Cost Analysis\n\n{cost_body.get('response', 'No cost data available')}\n\n"
-            except:
-                combined_response += f"## 📊 Cost Analysis\n\n{cost_response.get('body', 'No cost data available')}\n\n"
-        elif cost_response.get("error"):
-            combined_response += f"## 📊 Cost Analysis\n\n⚠️ {cost_response['error']}\n\n"
+        # Invoke agents based on routing decision
+        responses = {}
         
-        # Add optimization recommendations
-        if "body" in advisor_response and not advisor_response.get("error"):
-            try:
-                advisor_body = json.loads(advisor_response["body"]) if isinstance(advisor_response["body"], str) else advisor_response["body"]
-                combined_response += f"## 💡 Optimization Recommendations\n\n{advisor_body.get('response', 'No recommendations available')}"
-            except:
-                combined_response += f"## 💡 Optimization Recommendations\n\n{advisor_response.get('body', 'No recommendations available')}"
-        elif advisor_response.get("error"):
-            combined_response += f"## 💡 Optimization Recommendations\n\n⚠️ {advisor_response['error']}"
+        if "cost_forecast" in agents_to_invoke:
+            responses["cost_forecast"] = invoke_cost_forecast_agent(query)
+        
+        if "trusted_advisor" in agents_to_invoke:
+            responses["trusted_advisor"] = invoke_trusted_advisor_agent(query)
+            
+        if "budget_management" in agents_to_invoke:
+            responses["budget_management"] = invoke_budget_management_agent(query)
+        
+        # Add cost analysis section
+        if "cost_forecast" in responses:
+            cost_response = responses["cost_forecast"]
+            if "body" in cost_response and not cost_response.get("error"):
+                try:
+                    cost_body = json.loads(cost_response["body"]) if isinstance(cost_response["body"], str) else cost_response["body"]
+                    combined_response += f"## 📊 Cost Analysis\n\n{cost_body.get('response', 'No cost data available')}\n\n"
+                except:
+                    combined_response += f"## 📊 Cost Analysis\n\n{cost_response.get('body', 'No cost data available')}\n\n"
+            elif cost_response.get("error"):
+                combined_response += f"## 📊 Cost Analysis\n\n⚠️ {cost_response['error']}\n\n"
+        
+        # Add optimization recommendations section
+        if "trusted_advisor" in responses:
+            advisor_response = responses["trusted_advisor"]
+            if "body" in advisor_response and not advisor_response.get("error"):
+                try:
+                    advisor_body = json.loads(advisor_response["body"]) if isinstance(advisor_response["body"], str) else advisor_response["body"]
+                    combined_response += f"## 💡 Optimization Recommendations\n\n{advisor_body.get('response', 'No recommendations available')}\n\n"
+                except:
+                    combined_response += f"## 💡 Optimization Recommendations\n\n{advisor_response.get('body', 'No recommendations available')}\n\n"
+            elif advisor_response.get("error"):
+                combined_response += f"## 💡 Optimization Recommendations\n\n⚠️ {advisor_response['error']}\n\n"
+        
+        # Add budget management section
+        if "budget_management" in responses:
+            budget_response = responses["budget_management"]
+            if "body" in budget_response and not budget_response.get("error"):
+                try:
+                    budget_body = json.loads(budget_response["body"]) if isinstance(budget_response["body"], str) else budget_response["body"]
+                    combined_response += f"## 🎯 Budget Management & Cost Controls\n\n{budget_body.get('response', 'No budget recommendations available')}\n\n"
+                except:
+                    combined_response += f"## 🎯 Budget Management & Cost Controls\n\n{budget_response.get('body', 'No budget recommendations available')}\n\n"
+            elif budget_response.get("error"):
+                combined_response += f"## 🎯 Budget Management & Cost Controls\n\n⚠️ {budget_response['error']}\n\n"
+        
+        # Add comprehensive strategy section if multiple agents were used
+        if len(responses) > 1:
+            combined_response += f"## 📋 Integrated FinOps Strategy\n\n"
+            combined_response += f"This comprehensive analysis combines insights from {len(responses)} specialized agents to provide you with a complete financial operations strategy for your AWS environment. "
+            combined_response += f"Use the cost analysis to understand your spending patterns, apply the optimization recommendations to reduce costs, and implement the budget controls to maintain ongoing financial governance."
         
         return combined_response
     
@@ -138,21 +185,13 @@ def get_supervisor_agent():
             logger.info(f"LLM routing decision: {routing_decision}")
             
             agents_to_invoke = routing_decision["agents"]
-            
-            # Handle "both" routing decision by converting to explicit agent list
-            if "both" in agents_to_invoke:
-                agents_to_invoke = ["cost_forecast", "trusted_advisor"]
-            
             routing_explanation = router.get_routing_explanation(query, routing_decision)
             
-            # Handle "both" routing decision
-            if "both" in agents_to_invoke:
-                agents_to_invoke = ["cost_forecast", "trusted_advisor"]
-            
-            # Route to appropriate agent(s) based on LLM decision
+            # Handle single agent routing
             if len(agents_to_invoke) == 1:
-                # Single agent routing
-                if "cost_forecast" in agents_to_invoke:
+                agent = agents_to_invoke[0]
+                
+                if agent == "cost_forecast":
                     logger.info("LLM routed to Cost Forecast Agent only")
                     response = invoke_cost_forecast_agent(query)
                     
@@ -166,7 +205,7 @@ def get_supervisor_agent():
                     else:
                         return f"# 📊 AWS Cost Analysis\n\n{routing_explanation}\n\n⚠️ {response.get('error', 'Unknown error occurred')}"
                 
-                elif "trusted_advisor" in agents_to_invoke:
+                elif agent == "trusted_advisor":
                     logger.info("LLM routed to Trusted Advisor Agent only")
                     response = invoke_trusted_advisor_agent(query)
                     
@@ -179,11 +218,25 @@ def get_supervisor_agent():
                             return f"# 💡 AWS Optimization Recommendations\n\n{routing_explanation}\n\n{response.get('body', 'No recommendations available')}"
                     else:
                         return f"# 💡 AWS Optimization Recommendations\n\n{routing_explanation}\n\n⚠️ {response.get('error', 'Unknown error occurred')}"
+                
+                elif agent == "budget_management":
+                    logger.info("LLM routed to Budget Management Agent only")
+                    response = invoke_budget_management_agent(query)
+                    
+                    # Extract response content
+                    if "body" in response and not response.get("error"):
+                        try:
+                            body = json.loads(response["body"]) if isinstance(response["body"], str) else response["body"]
+                            return f"# 🎯 AWS Budget Management\n\n{routing_explanation}\n\n{body.get('response', 'No budget recommendations available')}"
+                        except:
+                            return f"# 🎯 AWS Budget Management\n\n{routing_explanation}\n\n{response.get('body', 'No budget recommendations available')}"
+                    else:
+                        return f"# 🎯 AWS Budget Management\n\n{routing_explanation}\n\n⚠️ {response.get('error', 'Unknown error occurred')}"
             
             else:
                 # Multiple agent routing (comprehensive analysis)
-                logger.info("LLM routed to both agents for comprehensive analysis")
-                return get_comprehensive_finops_analysis(query, routing_explanation)
+                logger.info(f"LLM routed to multiple agents: {agents_to_invoke}")
+                return get_comprehensive_finops_analysis(query, routing_explanation, agents_to_invoke)
             
         except Exception as e:
             logger.error(f"Error in supervisor agent: {str(e)}")

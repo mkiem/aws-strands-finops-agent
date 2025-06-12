@@ -46,6 +46,7 @@ Resources:
                 Resource:
                   - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:aws-cost-forecast-agent
                   - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:trusted-advisor-agent-trusted-advisor-agent
+                  - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:budget-management-agent
         - PolicyName: BedrockAccess
           PolicyDocument:
             Version: '2012-10-17'

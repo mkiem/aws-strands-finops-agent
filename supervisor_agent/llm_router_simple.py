@@ -36,60 +36,74 @@ Examples:
         )
     
     def fast_route_query(self, query: str) -> Optional[Dict[str, Any]]:
-        """Fast routing for common query patterns with confidence scoring"""
+        """Enhanced fast routing with better multi-part query detection"""
         if not query or len(query.strip()) < 5:
             return None  # Too short/unclear - use LLM
             
         query_lower = query.lower()
         
-        # High-confidence budget routing
-        budget_keywords = ['budget', 'spending limit', 'cost control', 'governance', 'budget recommendation', 'budget suggestions', 'spending controls']
-        if any(word in query_lower for word in budget_keywords):
-            # Check for mixed intent
-            if any(word in query_lower for word in ['cost analysis', 'spending trend', 'optimize', 'savings']):
-                return None  # Mixed intent - use LLM for better routing
+        # Multi-part query patterns (check these FIRST before complexity check)
+        forecast_budget_patterns = [
+            ('forecast' in query_lower and 'budget' in query_lower),
+            ('prediction' in query_lower and 'budget' in query_lower),
+            ('next' in query_lower and ('month' in query_lower or 'quarter' in query_lower) and 'budget' in query_lower),
+            ('future' in query_lower and 'budget' in query_lower),
+            ('future' in query_lower and 'spending limit' in query_lower),
+            ('cost' in query_lower and 'forecast' in query_lower and 'budget' in query_lower),
+        ]
+        
+        if any(forecast_budget_patterns):
             return {
-                "agents": ["budget_management"], 
-                "reasoning": "Fast route: Clear budget management query",
-                "routing_method": "fast_path",
+                "agents": ["cost_forecast", "budget_management"],
+                "reasoning": "Fast route: Forecast and budget planning query",
+                "routing_method": "fast_path_multi",
                 "confidence": "high"
             }
         
-        # High-confidence cost analysis routing
-        cost_keywords = ['current cost', 'aws cost', 'spending', 'expense', 'bill', 'cost analysis', 'monthly cost', 'cost breakdown']
-        if any(word in query_lower for word in cost_keywords) and not any(word in query_lower for word in ['optim', 'reduc', 'saving']):
-            if any(word in query_lower for word in ['budget', 'control', 'limit']):
-                return None  # Mixed intent - use LLM
+        cost_optimization_patterns = [
+            ('cost' in query_lower and 'optim' in query_lower),
+            ('spending' in query_lower and 'reduc' in query_lower),
+            ('forecast' in query_lower and 'saving' in query_lower),
+            ('trend' in query_lower and 'recommend' in query_lower),
+        ]
+        
+        if any(cost_optimization_patterns):
             return {
-                "agents": ["cost_forecast"], 
-                "reasoning": "Fast route: Clear cost analysis query",
-                "routing_method": "fast_path",
+                "agents": ["cost_forecast", "trusted_advisor"],
+                "reasoning": "Fast route: Cost analysis and optimization query",
+                "routing_method": "fast_path_multi",
                 "confidence": "high"
             }
         
-        # High-confidence optimization routing
-        optimization_keywords = ['optimize', 'saving', 'reduce cost', 'efficiency', 'recommendation', 'cost reduction', 'save money']
-        if any(word in query_lower for word in optimization_keywords):
-            if any(word in query_lower for word in ['budget', 'current cost', 'spending analysis']):
-                return None  # Mixed intent - use LLM
+        budget_optimization_patterns = [
+            ('budget' in query_lower and 'optim' in query_lower),
+            ('budget' in query_lower and 'recommend' in query_lower),
+            ('budget' in query_lower and 'saving' in query_lower),
+        ]
+        
+        if any(budget_optimization_patterns):
             return {
-                "agents": ["trusted_advisor"], 
-                "reasoning": "Fast route: Clear optimization query",
-                "routing_method": "fast_path",
+                "agents": ["budget_management", "trusted_advisor"],
+                "reasoning": "Fast route: Budget optimization query",
+                "routing_method": "fast_path_multi",
                 "confidence": "high"
             }
         
-        # Comprehensive analysis indicators
-        comprehensive_keywords = ['complete', 'comprehensive', 'full analysis', 'everything', 'all aspects', 'complete finops']
-        if any(word in query_lower for word in comprehensive_keywords):
+        # Three-way combinations that need comprehensive analysis
+        comprehensive_patterns = [
+            ('cost' in query_lower and 'optim' in query_lower and 'budget' in query_lower),
+            ('optimization' in query_lower and 'budget' in query_lower and 'planning' in query_lower),
+        ]
+        
+        if any(comprehensive_patterns):
             return {
-                "agents": ["cost_forecast", "trusted_advisor", "budget_management"], 
-                "reasoning": "Fast route: Comprehensive analysis requested",
-                "routing_method": "fast_path",
+                "agents": ["cost_forecast", "trusted_advisor", "budget_management"],
+                "reasoning": "Fast route: Multi-domain comprehensive query",
+                "routing_method": "fast_path_multi",
                 "confidence": "high"
             }
         
-        # Multi-domain patterns
+        # Existing multi-domain patterns (check before complexity)
         if ('cost' in query_lower and 'budget' in query_lower) or ('spending' in query_lower and 'budget' in query_lower):
             return {
                 "agents": ["cost_forecast", "budget_management"], 
@@ -106,7 +120,81 @@ Examples:
                 "confidence": "medium"
             }
         
-        return None  # Uncertain - fallback to LLM routing
+        # Comprehensive analysis indicators
+        comprehensive_keywords = ['complete', 'comprehensive', 'full analysis', 'everything', 'all aspects', 'complete finops']
+        if any(word in query_lower for word in comprehensive_keywords):
+            return {
+                "agents": ["cost_forecast", "trusted_advisor", "budget_management"], 
+                "reasoning": "Fast route: Comprehensive analysis requested",
+                "routing_method": "fast_path",
+                "confidence": "high"
+            }
+        
+        # Complexity indicators that should force LLM routing (check AFTER patterns)
+        complexity_indicators = [
+            query_lower.count(' and ') >= 2,  # More than 2 "and" connections
+            '?' in query and query.count('?') > 1,  # Multiple questions
+            len(query.split()) > 20,  # Very long queries (increased threshold)
+            query_lower.count('what') > 2,  # More than 2 "what" questions
+            query_lower.count('how') > 1,  # Multiple "how" questions
+        ]
+        
+        if any(complexity_indicators):
+            logger.info("Complex query detected, forcing LLM routing")
+            return None  # Force LLM routing for complex queries
+        
+        # Enhanced single-agent routing with better mixed intent detection
+        
+        # High-confidence budget routing
+        budget_keywords = ['budget', 'spending limit', 'cost control', 'governance', 'budget recommendation', 'budget suggestions', 'spending controls']
+        if any(word in query_lower for word in budget_keywords):
+            # Enhanced mixed intent check
+            mixed_intent_keywords = [
+                'cost analysis', 'spending trend', 'optimize', 'savings', 
+                'forecast', 'prediction', 'trend', 'historical', 
+                'next month', 'future cost', 'recommend', 'efficiency'
+            ]
+            if any(word in query_lower for word in mixed_intent_keywords):
+                logger.info("Mixed intent detected in budget query, using LLM routing")
+                return None  # Mixed intent - use LLM for better routing
+            return {
+                "agents": ["budget_management"], 
+                "reasoning": "Fast route: Clear budget management query",
+                "routing_method": "fast_path",
+                "confidence": "high"
+            }
+        
+        # High-confidence cost analysis routing
+        cost_keywords = ['current cost', 'aws cost', 'spending', 'expense', 'bill', 'cost analysis', 'monthly cost', 'cost breakdown']
+        if any(word in query_lower for word in cost_keywords) and not any(word in query_lower for word in ['optim', 'reduc', 'saving']):
+            # Enhanced mixed intent check
+            if any(word in query_lower for word in ['budget', 'control', 'limit', 'recommend', 'optim']):
+                logger.info("Mixed intent detected in cost query, using LLM routing")
+                return None  # Mixed intent - use LLM
+            return {
+                "agents": ["cost_forecast"], 
+                "reasoning": "Fast route: Clear cost analysis query",
+                "routing_method": "fast_path",
+                "confidence": "high"
+            }
+        
+        # High-confidence optimization routing
+        optimization_keywords = ['optimize', 'saving', 'reduce cost', 'efficiency', 'recommendation', 'cost reduction', 'save money']
+        if any(word in query_lower for word in optimization_keywords):
+            # Enhanced mixed intent check
+            if any(word in query_lower for word in ['budget', 'current cost', 'spending analysis', 'forecast', 'trend']):
+                logger.info("Mixed intent detected in optimization query, using LLM routing")
+                return None  # Mixed intent - use LLM
+            return {
+                "agents": ["trusted_advisor"], 
+                "reasoning": "Fast route: Clear optimization query",
+                "routing_method": "fast_path",
+                "confidence": "high"
+            }
+        
+        # No clear fast path found - use LLM
+        logger.info("No clear fast path pattern found, using LLM routing")
+        return None
     
     
     def route_query(self, query: str) -> Dict[str, Any]:

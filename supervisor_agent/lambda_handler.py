@@ -2,6 +2,7 @@ import json
 import os
 import boto3
 import logging
+import concurrent.futures
 from typing import Dict, Any, Optional, List
 from llm_router_simple import LLMQueryRouter
 
@@ -116,22 +117,43 @@ def get_supervisor_agent():
             return {"error": f"Budget management agent error: {str(e)}"}
     
     def get_comprehensive_finops_analysis(query: str, routing_explanation: str, agents_to_invoke: List[str]) -> str:
-        """Get comprehensive analysis from selected agents."""
+        """Get comprehensive analysis from selected agents using parallel processing."""
         logger.info(f"Performing comprehensive analysis for query: {query} with agents: {agents_to_invoke}")
         
         combined_response = f"# 🏦 Comprehensive AWS FinOps Analysis\n\n{routing_explanation}\n\n"
         
-        # Invoke agents based on routing decision
-        responses = {}
+        # Prepare agent invocation tasks for parallel execution
+        agent_tasks = {}
         
-        if "cost_forecast" in agents_to_invoke:
-            responses["cost_forecast"] = invoke_cost_forecast_agent(query)
-        
-        if "trusted_advisor" in agents_to_invoke:
-            responses["trusted_advisor"] = invoke_trusted_advisor_agent(query)
+        # Use ThreadPoolExecutor for parallel Lambda invocations
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            # Submit agent invocation tasks
+            if "cost_forecast" in agents_to_invoke:
+                agent_tasks["cost_forecast"] = executor.submit(invoke_cost_forecast_agent, query)
+                logger.info("Submitted cost forecast agent task")
             
-        if "budget_management" in agents_to_invoke:
-            responses["budget_management"] = invoke_budget_management_agent(query)
+            if "trusted_advisor" in agents_to_invoke:
+                agent_tasks["trusted_advisor"] = executor.submit(invoke_trusted_advisor_agent, query)
+                logger.info("Submitted trusted advisor agent task")
+                
+            if "budget_management" in agents_to_invoke:
+                agent_tasks["budget_management"] = executor.submit(invoke_budget_management_agent, query)
+                logger.info("Submitted budget management agent task")
+            
+            # Collect results from parallel execution
+            responses = {}
+            for agent_name, future in agent_tasks.items():
+                try:
+                    responses[agent_name] = future.result(timeout=30)  # 30 second timeout per agent
+                    logger.info(f"Completed {agent_name} agent invocation")
+                except concurrent.futures.TimeoutError:
+                    logger.error(f"Timeout waiting for {agent_name} agent")
+                    responses[agent_name] = {"error": f"{agent_name} agent timeout after 30 seconds"}
+                except Exception as e:
+                    logger.error(f"Error getting result from {agent_name} agent: {str(e)}")
+                    responses[agent_name] = {"error": f"{agent_name} agent error: {str(e)}"}
+        
+        logger.info(f"Parallel processing completed. Received {len(responses)} responses.")
         
         # Add cost analysis section
         if "cost_forecast" in responses:
@@ -173,7 +195,8 @@ def get_supervisor_agent():
         if len(responses) > 1:
             combined_response += f"## 📋 Integrated FinOps Strategy\n\n"
             combined_response += f"This comprehensive analysis combines insights from {len(responses)} specialized agents to provide you with a complete financial operations strategy for your AWS environment. "
-            combined_response += f"Use the cost analysis to understand your spending patterns, apply the optimization recommendations to reduce costs, and implement the budget controls to maintain ongoing financial governance."
+            combined_response += f"Use the cost analysis to understand your spending patterns, apply the optimization recommendations to reduce costs, and implement the budget controls to maintain ongoing financial governance.\n\n"
+            combined_response += f"*⚡ Analysis completed using parallel processing for optimal performance.*"
         
         return combined_response
     

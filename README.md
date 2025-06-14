@@ -288,12 +288,16 @@ curl -X POST \
 - **API Gateway**: 71mmhvzkuh.execute-api.us-east-1.amazonaws.com/prod
 - **Amplify App**: staging.da7jmqelobr5a.amplifyapp.com
 - **AWS Cost Forecast Agent**: aws-cost-forecast-agent
-  - **Status**: ✅ Successfully deployed and functional
+  - **Status**: ✅ **OPTIMIZED** - Successfully deployed and functional with improved performance
   - **Function ARN**: arn:aws:lambda:us-east-1:837882009522:function:aws-cost-forecast-agent
   - **CloudFormation Stack**: aws-cost-forecast-agent
   - **S3 Package**: s3://finops-deployment-packages-062025/aws_cost_forecast_agent_lambda.zip
-  - **Runtime**: Python 3.10 with Lambda layer for dependencies
-  - **Last Updated**: 2025-06-10 (Renamed from finops-agent)
+  - **Runtime**: Python 3.11 with Lambda layer for dependencies
+  - **Memory**: 512MB (upgraded from 256MB for better performance)
+  - **Timeout**: 300 seconds (upgraded from 60s to handle complex forecasting operations)
+  - **Capabilities**: Current cost analysis, historical cost trends, cost forecasting up to 12 months
+  - **Performance**: ✅ Fixed timeout issues - now handles complex Cost Explorer API operations
+  - **Last Updated**: 2025-06-14 ✅ **TIMEOUT FIXED** - Increased timeout and memory for reliable forecasting
 - **Trusted Advisor Agent**: trusted-advisor-agent-trusted-advisor-agent (Strands-based cost optimization agent)
   - **Status**: ✅ Successfully deployed and fully functional
   - **Function ARN**: arn:aws:lambda:us-east-1:837882009522:function:trusted-advisor-agent-trusted-advisor-agent
@@ -347,22 +351,21 @@ curl -X POST \
   - **Performance**: Successfully processes complex FinOps queries with supervisor agent orchestration
   - **User Experience**: Real-time progress (5% → 30% → 60% → 90% → 100%) with full response display
 - **Budget Management Agent**: budget-management-agent
-  - **Status**: ✅ **DEPLOYED** - Proactive cost control and governance
+  - **Status**: ✅ **DEPLOYED** - Budget analysis and recommendations
   - **Function ARN**: arn:aws:lambda:us-east-1:837882009522:function:budget-management-agent
   - **CloudFormation Stack**: budget-management-agent
   - **Runtime**: Python 3.11 with Strands SDK (15.3 MiB package)
   - **Framework**: Strands Agent with Claude 3.5 Haiku
   - **Memory**: 512MB, Timeout: 300 seconds (5 minutes)
   - **Capabilities**: 
-    - Automated budget creation and monitoring
     - Budget performance analysis and recommendations  
-    - Real-time budget alerts and governance
-    - Proactive cost control through budget actions
-    - Integration with Cost Explorer for recommendations
-  - **Tools**: get_budget_analysis, get_budget_recommendations, create_budget, monitor_budget_alerts, get_budget_performance_history
+    - Historical spending pattern analysis
+    - Budget recommendations with specific dollar amounts
+    - Integration with Cost Explorer for data analysis
+  - **Tools**: get_budget_analysis, get_budget_recommendations
   - **DynamoDB Table**: budget-management-state (PAY_PER_REQUEST)
   - **IAM Roles**: 
     - budget-management-lambda-role (Lambda execution)
     - budget-management-action-execution-role (Budget actions)
   - **CloudWatch Logs**: /aws/lambda/budget-management-agent
-  - **Last Updated**: 2025-06-11 ✅ **PRODUCTION READY** - Successfully deployed and ready for testing
+  - **Last Updated**: 2025-06-12 ✅ **REVERTED** - Removed create/modify budget functionality, back to analysis and recommendations only

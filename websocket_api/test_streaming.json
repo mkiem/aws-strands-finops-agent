@@ -1,0 +1,7 @@
+{
+  "Records": [
+    {
+      "body": "{\"jobId\": \"test-streaming-123\", \"connectionId\": \"test-connection-456\", \"userId\": \"test-user\", \"username\": \"test-user\", \"query\": \"Provide comprehensive analysis of my AWS costs and optimization opportunities\", \"action\": \"process_finops_query\"}"
+    }
+  ]
+}

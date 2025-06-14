@@ -141,3 +141,183 @@
   margin-left: 0;
   color: #495057;
 }
+
+/* Streaming response styles */
+.finops-response.streaming {
+  animation: fadeIn 0.3s ease-in;
+}
+
+.response-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.streaming-progress {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.streaming-progress .completed {
+  color: #28a745;
+}
+
+.streaming-progress .in-progress {
+  color: #007bff;
+  animation: pulse 2s infinite;
+}
+
+.routing-explanation {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  border-left: 4px solid #007bff;
+}
+
+.streaming-results {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.streaming-agent-section {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 1rem;
+  transition: all 0.3s ease;
+}
+
+.streaming-agent-section.loading {
+  background: #f8f9fa;
+  border-color: #dee2e6;
+}
+
+.streaming-agent-section.completed {
+  background: #f8fff8;
+  border-color: #28a745;
+  animation: slideIn 0.5s ease-out;
+}
+
+.streaming-agent-section.error {
+  background: #fff5f5;
+  border-color: #dc3545;
+}
+
+.agent-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.agent-header h3 {
+  margin: 0;
+  color: #333;
+  font-size: 1.1rem;
+}
+
+.agent-status {
+  font-size: 1.2rem;
+}
+
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+.agent-content {
+  margin-top: 0.5rem;
+}
+
+.agent-timestamp {
+  font-size: 0.8rem;
+  color: #666;
+  margin-top: 0.5rem;
+  text-align: right;
+}
+
+.loading-placeholder {
+  margin-top: 0.5rem;
+}
+
+.skeleton-line {
+  height: 1rem;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+}
+
+.skeleton-line.short {
+  width: 60%;
+}
+
+.final-summary {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: #f0f8ff;
+  border-radius: 8px;
+  border: 1px solid #007bff;
+}
+
+.final-summary h3 {
+  margin-top: 0;
+  color: #007bff;
+}
+
+.analysis-timing {
+  margin-top: 1rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: #666;
+  font-style: italic;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { transform: translateX(-10px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Responsive design for streaming */
+@media (max-width: 768px) {
+  .response-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .streaming-progress {
+    font-size: 0.8rem;
+  }
+  
+  .agent-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+}

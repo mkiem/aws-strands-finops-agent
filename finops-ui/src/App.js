@@ -57,6 +57,70 @@ function App({ signOut, user }) {
         setProgressMessage(message.message);
         break;
         
+      // New streaming message types
+      case 'analysis_started':
+        setCurrentJobId(message.jobId);
+        setProgress(10);
+        setProgressMessage(`Starting analysis with ${message.agents.length} agents...`);
+        setResponse({
+          type: 'streaming',
+          jobId: message.jobId,
+          agents: message.agents,
+          routing_explanation: message.routing_explanation,
+          results: {},
+          completed_agents: [],
+          total_agents: message.agents.length,
+          start_time: Date.now()
+        });
+        break;
+        
+      case 'agent_completed':
+        setProgress(message.progress);
+        setProgressMessage(`Completed ${message.agent} analysis (${message.completed_agents.length}/${message.total_agents})`);
+        
+        // Update streaming response with new agent result
+        setResponse(prevResponse => {
+          if (prevResponse && prevResponse.type === 'streaming' && prevResponse.jobId === message.jobId) {
+            return {
+              ...prevResponse,
+              results: {
+                ...prevResponse.results,
+                [message.agent]: message.result
+              },
+              completed_agents: message.completed_agents,
+              progress: message.progress
+            };
+          }
+          return prevResponse;
+        });
+        break;
+        
+      case 'analysis_completed':
+        setLoading(false);
+        setProgress(100);
+        setProgressMessage('Analysis completed!');
+        setCurrentJobId(null);
+        
+        // Set final response
+        setResponse(prevResponse => {
+          if (prevResponse && prevResponse.type === 'streaming' && prevResponse.jobId === message.jobId) {
+            return {
+              ...prevResponse,
+              final_response: message.final_response,
+              completed: true,
+              processing_time: message.processing_time
+            };
+          }
+          // Fallback to traditional response format
+          return {
+            query: prevResponse?.query || '',
+            response: message.final_response,
+            agent: "AWS-FinOps-Supervisor",
+            timestamp: new Date().toISOString()
+          };
+        });
+        break;
+        
       case 'job_completed':
         setLoading(false);
         setProgress(100);

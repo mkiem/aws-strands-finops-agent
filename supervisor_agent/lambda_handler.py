@@ -3,12 +3,43 @@ import os
 import boto3
 import logging
 import concurrent.futures
-from typing import Dict, Any, Optional, List
+import uuid
+import time
+from typing import Dict, Any, Optional, List, Callable
 from llm_router_simple import LLMQueryRouter
 
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
+
+# WebSocket client for streaming responses
+websocket_client = None
+
+def get_websocket_client():
+    """Get or create WebSocket client for streaming responses."""
+    global websocket_client
+    if websocket_client is None:
+        websocket_client = boto3.client('apigatewaymanagementapi', 
+                                      endpoint_url=os.environ.get('WEBSOCKET_ENDPOINT'))
+    return websocket_client
+
+def send_websocket_message(connection_id: str, message: Dict[str, Any]) -> bool:
+    """Send a message via WebSocket."""
+    try:
+        if not connection_id:
+            logger.warning("No connection ID provided for WebSocket message")
+            return False
+            
+        client = get_websocket_client()
+        client.post_to_connection(
+            ConnectionId=connection_id,
+            Data=json.dumps(message)
+        )
+        logger.info(f"Sent WebSocket message: {message.get('type', 'unknown')}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send WebSocket message: {str(e)}")
+        return False
 
 def format_response(status_code: int, body: Dict[str, Any]) -> Dict[str, Any]:
     """Format response with CORS headers for Function URL."""
@@ -116,7 +147,102 @@ def get_supervisor_agent():
             logger.error(f"Error invoking budget management agent: {str(e)}")
             return {"error": f"Budget management agent error: {str(e)}"}
     
-    def get_comprehensive_finops_analysis(query: str, routing_explanation: str, agents_to_invoke: List[str]) -> str:
+    def get_comprehensive_finops_analysis_streaming(query: str, routing_explanation: str, agents_to_invoke: List[str], connection_id: str = None, job_id: str = None) -> str:
+        """Get comprehensive analysis from selected agents with streaming support."""
+        logger.info(f"Performing streaming comprehensive analysis for query: {query} with agents: {agents_to_invoke}")
+        
+        # Generate job ID if not provided
+        if not job_id:
+            job_id = str(uuid.uuid4())
+        
+        # Send immediate acknowledgment
+        if connection_id:
+            send_websocket_message(connection_id, {
+                'type': 'analysis_started',
+                'jobId': job_id,
+                'agents': agents_to_invoke,
+                'query': query,
+                'estimatedTime': f"{len(agents_to_invoke) * 2}-{len(agents_to_invoke) * 5} seconds",
+                'routing_explanation': routing_explanation
+            })
+        
+        combined_response = f"# 🏦 Comprehensive AWS FinOps Analysis\n\n{routing_explanation}\n\n"
+        
+        # Prepare agent invocation tasks for parallel execution
+        agent_tasks = {}
+        agent_functions = {
+            'cost_forecast': invoke_cost_forecast_agent,
+            'trusted_advisor': invoke_trusted_advisor_agent,
+            'budget_management': invoke_budget_management_agent
+        }
+        
+        # Use ThreadPoolExecutor for parallel Lambda invocations
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            # Submit agent invocation tasks
+            for agent_name in agents_to_invoke:
+                if agent_name in agent_functions:
+                    agent_tasks[agent_name] = executor.submit(agent_functions[agent_name], query)
+                    logger.info(f"Submitted {agent_name} agent task")
+            
+            # Stream results as they complete
+            completed_agents = []
+            responses = {}
+            
+            for future in concurrent.futures.as_completed(agent_tasks.values(), timeout=35):
+                # Find which agent completed
+                completed_agent = None
+                for agent_name, agent_future in agent_tasks.items():
+                    if agent_future == future:
+                        completed_agent = agent_name
+                        break
+                
+                if completed_agent:
+                    try:
+                        result = future.result(timeout=5)
+                        responses[completed_agent] = result
+                        completed_agents.append(completed_agent)
+                        
+                        logger.info(f"Completed {completed_agent} agent invocation")
+                        
+                        # Stream individual result if WebSocket available
+                        if connection_id:
+                            # Format the individual result
+                            formatted_result = format_individual_agent_result(completed_agent, result)
+                            
+                            send_websocket_message(connection_id, {
+                                'type': 'agent_completed',
+                                'jobId': job_id,
+                                'agent': completed_agent,
+                                'result': formatted_result,
+                                'progress': int((len(completed_agents) / len(agents_to_invoke)) * 100),
+                                'completed_agents': completed_agents,
+                                'total_agents': len(agents_to_invoke)
+                            })
+                        
+                    except concurrent.futures.TimeoutError:
+                        logger.error(f"Timeout waiting for {completed_agent} agent")
+                        responses[completed_agent] = {"error": f"{completed_agent} agent timeout after 30 seconds"}
+                    except Exception as e:
+                        logger.error(f"Error getting result from {completed_agent} agent: {str(e)}")
+                        responses[completed_agent] = {"error": f"{completed_agent} agent error: {str(e)}"}
+        
+        logger.info(f"Streaming processing completed. Received {len(responses)} responses.")
+        
+        # Build final combined response (same as before)
+        combined_response = build_combined_response(routing_explanation, responses)
+        
+        # Send final completion message
+        if connection_id:
+            send_websocket_message(connection_id, {
+                'type': 'analysis_completed',
+                'jobId': job_id,
+                'final_response': combined_response,
+                'total_agents': len(agents_to_invoke),
+                'completed_agents': len(responses),
+                'processing_time': f"Completed in parallel processing mode"
+            })
+        
+        return combined_response
         """Get comprehensive analysis from selected agents using parallel processing."""
         logger.info(f"Performing comprehensive analysis for query: {query} with agents: {agents_to_invoke}")
         
@@ -200,7 +326,7 @@ def get_supervisor_agent():
         
         return combined_response
     
-    def supervisor_agent(query: str):
+    def supervisor_agent(query: str, connection_id: str = None):
         """Intelligent supervisor agent with LLM-based query routing."""
         try:
             # Get routing decision from LLM
@@ -263,9 +389,9 @@ def get_supervisor_agent():
                     return final_response, routing_decision
             
             else:
-                # Multiple agent routing (comprehensive analysis)
+                # Multiple agent routing (comprehensive analysis with streaming)
                 logger.info(f"LLM routed to multiple agents: {agents_to_invoke}")
-                final_response = get_comprehensive_finops_analysis(query, routing_explanation, agents_to_invoke)
+                final_response = get_comprehensive_finops_analysis_streaming(query, routing_explanation, agents_to_invoke, connection_id)
                 return final_response, routing_decision
             
         except Exception as e:
@@ -274,6 +400,93 @@ def get_supervisor_agent():
             return f"# ⚠️ Error\n\nError processing query: {str(e)}", error_metrics
     
     return supervisor_agent
+
+def format_individual_agent_result(agent_name: str, result: Dict[str, Any]) -> Dict[str, Any]:
+    """Format individual agent result for streaming."""
+    try:
+        if "body" in result and not result.get("error"):
+            try:
+                body = json.loads(result["body"]) if isinstance(result["body"], str) else result["body"]
+                response_text = body.get('response', 'No data available')
+            except:
+                response_text = result.get('body', 'No data available')
+        elif result.get("error"):
+            response_text = f"⚠️ {result['error']}"
+        else:
+            response_text = "No data available"
+        
+        # Agent-specific formatting
+        agent_titles = {
+            'cost_forecast': '📊 Cost Analysis',
+            'trusted_advisor': '💡 Optimization Recommendations', 
+            'budget_management': '🎯 Budget Management & Cost Controls'
+        }
+        
+        return {
+            'agent': agent_name,
+            'title': agent_titles.get(agent_name, f'{agent_name.title()} Analysis'),
+            'content': response_text,
+            'status': 'completed' if not result.get("error") else 'error',
+            'timestamp': time.time()
+        }
+    except Exception as e:
+        logger.error(f"Error formatting {agent_name} result: {str(e)}")
+        return {
+            'agent': agent_name,
+            'title': f'{agent_name.title()} Analysis',
+            'content': f"Error formatting result: {str(e)}",
+            'status': 'error',
+            'timestamp': time.time()
+        }
+
+def build_combined_response(routing_explanation: str, responses: Dict[str, Any]) -> str:
+    """Build the final combined response from all agent results."""
+    combined_response = f"# 🏦 Comprehensive AWS FinOps Analysis\n\n{routing_explanation}\n\n"
+    
+    # Add cost analysis section
+    if "cost_forecast" in responses:
+        cost_response = responses["cost_forecast"]
+        if "body" in cost_response and not cost_response.get("error"):
+            try:
+                cost_body = json.loads(cost_response["body"]) if isinstance(cost_response["body"], str) else cost_response["body"]
+                combined_response += f"## 📊 Cost Analysis\n\n{cost_body.get('response', 'No cost data available')}\n\n"
+            except:
+                combined_response += f"## 📊 Cost Analysis\n\n{cost_response.get('body', 'No cost data available')}\n\n"
+        elif cost_response.get("error"):
+            combined_response += f"## 📊 Cost Analysis\n\n⚠️ {cost_response['error']}\n\n"
+    
+    # Add optimization recommendations section
+    if "trusted_advisor" in responses:
+        advisor_response = responses["trusted_advisor"]
+        if "body" in advisor_response and not advisor_response.get("error"):
+            try:
+                advisor_body = json.loads(advisor_response["body"]) if isinstance(advisor_response["body"], str) else advisor_response["body"]
+                combined_response += f"## 💡 Optimization Recommendations\n\n{advisor_body.get('response', 'No recommendations available')}\n\n"
+            except:
+                combined_response += f"## 💡 Optimization Recommendations\n\n{advisor_response.get('body', 'No recommendations available')}\n\n"
+        elif advisor_response.get("error"):
+            combined_response += f"## 💡 Optimization Recommendations\n\n⚠️ {advisor_response['error']}\n\n"
+    
+    # Add budget management section
+    if "budget_management" in responses:
+        budget_response = responses["budget_management"]
+        if "body" in budget_response and not budget_response.get("error"):
+            try:
+                budget_body = json.loads(budget_response["body"]) if isinstance(budget_response["body"], str) else budget_response["body"]
+                combined_response += f"## 🎯 Budget Management & Cost Controls\n\n{budget_body.get('response', 'No budget recommendations available')}\n\n"
+            except:
+                combined_response += f"## 🎯 Budget Management & Cost Controls\n\n{budget_response.get('body', 'No budget recommendations available')}\n\n"
+        elif budget_response.get("error"):
+            combined_response += f"## 🎯 Budget Management & Cost Controls\n\n⚠️ {budget_response['error']}\n\n"
+    
+    # Add comprehensive strategy section if multiple agents were used
+    if len(responses) > 1:
+        combined_response += f"## 📋 Integrated FinOps Strategy\n\n"
+        combined_response += f"This comprehensive analysis combines insights from {len(responses)} specialized agents to provide you with a complete financial operations strategy for your AWS environment. "
+        combined_response += f"Use the cost analysis to understand your spending patterns, apply the optimization recommendations to reduce costs, and implement the budget controls to maintain ongoing financial governance.\n\n"
+        combined_response += f"*⚡ Analysis completed using parallel processing with streaming updates for optimal performance.*"
+    
+    return combined_response
 
 def handler(event, context):
     """Lambda handler function."""
@@ -292,6 +505,7 @@ def handler(event, context):
             return format_options_response()
         
         query = extract_query(event)
+        connection_id = event.get('requestContext', {}).get('connectionId')  # Extract WebSocket connection ID
         
         if not query:
             return format_response(400, {
@@ -301,10 +515,12 @@ def handler(event, context):
             })
         
         logger.info(f"Processing query: {query}")
+        if connection_id:
+            logger.info(f"WebSocket connection ID: {connection_id}")
         
         # Get the supervisor agent and process the query
         supervisor = get_supervisor_agent()
-        response, routing_metrics = supervisor(query)
+        response, routing_metrics = supervisor(query, connection_id)
         
         # Format the response with performance metrics
         result = {

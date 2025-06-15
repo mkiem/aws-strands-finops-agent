@@ -1,0 +1,212 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS FinOps Supervisor Agent - Optimized Container-based Lambda deployment with Provisioned Concurrency'
+
+Parameters:
+  LambdaTimeout:
+    Type: Number
+    Default: 300
+    Description: Lambda function timeout in seconds (max 900)
+    MinValue: 1
+    MaxValue: 900
+  
+  LambdaMemorySize:
+    Type: Number
+    Default: 512
+    Description: Lambda function memory in MB
+    MinValue: 128
+    MaxValue: 10240
+
+  ProvisionedConcurrency:
+    Type: Number
+    Default: 2
+    Description: Number of provisioned concurrent executions
+    MinValue: 0
+    MaxValue: 10
+
+Resources:
+  FinOpsSupervisorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: InvokeAgents
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource:
+                  - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:aws-cost-forecast-agent:PROD
+                  - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:trusted-advisor-agent-trusted-advisor-agent
+                  - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:budget-management-agent
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource: '*'
+
+  FinOpsSupervisorFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: AWS-FinOps-Agent
+      PackageType: Image
+      Code:
+        ImageUri: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/aws-finops-agent:latest
+      Role: !GetAtt FinOpsSupervisorRole.Arn
+      Timeout: !Ref LambdaTimeout
+      MemorySize: !Ref LambdaMemorySize
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: AWS-FinOps-Agent
+          LOG_LEVEL: INFO
+          PYTHONWARNINGS: ignore
+          PYTHONPATH: /var/task
+          STRANDS_MODEL_REGION: !Ref AWS::Region
+          STRANDS_MODEL_ID: anthropic.claude-3-5-haiku-20241022-v1:0
+          REGION: !Ref AWS::Region
+      EphemeralStorage:
+        Size: 512
+      Architectures:
+        - x86_64
+
+  FinOpsSupervisorVersion:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !Ref FinOpsSupervisorFunction
+      Description: !Sub "Production version deployed on ${AWS::StackName}"
+
+  FinOpsSupervisorAlias:
+    Type: AWS::Lambda::Alias
+    Properties:
+      FunctionName: !Ref FinOpsSupervisorFunction
+      FunctionVersion: !GetAtt FinOpsSupervisorVersion.Version
+      Name: PROD
+      Description: "Production alias for supervisor agent with provisioned concurrency"
+      ProvisionedConcurrencyConfig:
+        ProvisionedConcurrentExecutions: !Ref ProvisionedConcurrency
+  FinOpsApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: FinOps-Supervisor-API
+      Description: API Gateway for FinOps Supervisor Agent
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  FinOpsApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref FinOpsApiGateway
+      ParentId: !GetAtt FinOpsApiGateway.RootResourceId
+      PathPart: query
+
+  FinOpsApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref FinOpsApiGateway
+      ResourceId: !Ref FinOpsApiResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FinOpsSupervisorAlias}/invocations
+        IntegrationResponses:
+          - StatusCode: 200
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+
+  FinOpsApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: FinOpsApiMethod
+    Properties:
+      RestApiId: !Ref FinOpsApiGateway
+
+  FinOpsApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      DeploymentId: !Ref FinOpsApiDeployment
+      RestApiId: !Ref FinOpsApiGateway
+      StageName: prod
+      CacheClusterEnabled: true
+      CacheClusterSize: '0.5'
+
+  # Lambda Function URL for streaming responses
+  FinOpsSupervisorFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !Ref FinOpsSupervisorAlias
+      AuthType: AWS_IAM
+      Cors:
+        AllowCredentials: false
+        AllowHeaders: 
+          - 'Content-Type'
+          - 'X-Amz-Date'
+          - 'Authorization'
+          - 'X-Api-Key'
+          - 'X-Amz-Security-Token'
+        AllowMethods: 
+          - 'POST'
+        AllowOrigins: 
+          - 'https://staging.da7jmqelobr5a.amplifyapp.com'
+          - 'http://localhost:3000'  # For local development
+        ExposeHeaders:
+          - 'Content-Type'
+        MaxAge: 86400
+
+  LambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref FinOpsSupervisorAlias
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${FinOpsApiGateway}/*/POST/query
+
+Outputs:
+  FinOpsSupervisorLambdaArn:
+    Description: ARN of the AWS FinOps Supervisor Agent Lambda function
+    Value: !GetAtt FinOpsSupervisorFunction.Arn
+
+  FinOpsSupervisorAliasArn:
+    Description: ARN of the AWS FinOps Supervisor Agent Production Alias
+    Value: !Ref FinOpsSupervisorAlias
+    Export:
+      Name: !Sub "${AWS::StackName}-SupervisorAgentAliasArn"
+
+  FinOpsSupervisorVersion:
+    Description: Version of the AWS FinOps Supervisor Agent
+    Value: !GetAtt FinOpsSupervisorVersion.Version
+
+  FinOpsSupervisorApiEndpoint:
+    Description: API Gateway endpoint URL for AWS FinOps Supervisor Agent (Legacy)
+    Value: !Sub https://${FinOpsApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/query
+
+  FinOpsSupervisorApiId:
+    Description: API Gateway REST API ID
+    Value: !Ref FinOpsApiGateway
+
+  FinOpsSupervisorFunctionUrlEndpoint:
+    Description: Lambda Function URL for streaming responses
+    Value: !GetAtt FinOpsSupervisorFunctionUrl.FunctionUrl
+
+  ProvisionedConcurrency:
+    Description: Number of provisioned concurrent executions
+    Value: !Ref ProvisionedConcurrency

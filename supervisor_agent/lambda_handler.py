@@ -105,7 +105,7 @@ def get_enhanced_supervisor_agent():
         try:
             logger.info(f"Invoking cost forecast agent with query: {query}")
             response = lambda_client.invoke(
-                FunctionName='aws-cost-forecast-agent',
+                FunctionName='aws-cost-forecast-agent:PROD',  # Use PROD alias for provisioned concurrency
                 InvocationType='RequestResponse',
                 Payload=json.dumps({"query": query})
             )

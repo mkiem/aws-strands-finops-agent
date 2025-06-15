@@ -644,11 +644,7 @@ def handler(event, context):
                 query = body.get('query', '')
             except Exception as e:
                 logger.error(f"Error parsing request body: {str(e)}")
-                error_blocks = [
-                    {"text": "# Error Processing Request\n\n"},
-                    {"text": f"I encountered an error while parsing your request: {str(e)}\n\n"},
-                    {"text": "Please ensure your request is properly formatted."}
-                ]
+                error_response = f"# Error Processing Request\n\nI encountered an error while parsing your request: {str(e)}\n\nPlease ensure your request is properly formatted."
                 return {
                     'statusCode': 400,
                     'headers': {
@@ -659,7 +655,7 @@ def handler(event, context):
                     },
                     'body': json.dumps({
                         'error': f"Invalid request format: {str(e)}",
-                        'response': error_blocks
+                        'response': error_response
                     })
                 }
         # Direct Lambda invocation
@@ -667,11 +663,7 @@ def handler(event, context):
             query = event['query']
         
         if not query:
-            error_blocks = [
-                {"text": "# Missing Query\n\n"},
-                {"text": "No query was provided in your request.\n\n"},
-                {"text": "Please provide a question about AWS costs or FinOps."}
-            ]
+            error_response = f"# Missing Query\n\nNo query was provided in your request.\n\nPlease provide a question about AWS costs or FinOps."
             return {
                 'statusCode': 400,
                 'headers': {
@@ -682,7 +674,7 @@ def handler(event, context):
                 },
                 'body': json.dumps({
                     'error': 'No query provided in the request',
-                    'response': error_blocks
+                    'response': error_response
                 })
             }
         
@@ -702,8 +694,25 @@ def handler(event, context):
         # Process the query
         logger.info(f"Processing query: {query}")
         agent_result = finops_agent(query)
-        response_text = str(agent_result)
+        
+        # Extract response properly from agent result
+        if hasattr(agent_result, 'content') and isinstance(agent_result.content, list):
+            # Handle content blocks format from Strands Agent
+            response_text = ""
+            for block in agent_result.content:
+                if hasattr(block, 'text'):
+                    response_text += block.text
+                elif isinstance(block, dict) and 'text' in block:
+                    response_text += block['text']
+                else:
+                    response_text += str(block)
+        else:
+            # Fallback to string conversion
+            response_text = str(agent_result)
+            
         logger.info(f"Agent response: {response_text}")
+        logger.info(f"Agent result type: {type(agent_result)}")
+        logger.info(f"Agent result attributes: {dir(agent_result) if hasattr(agent_result, '__dict__') else 'No attributes'}")
         
         # For demonstration with the S3 example
         if "S3 spend" in query.lower() and "June" in query:
@@ -766,11 +775,7 @@ def handler(event, context):
         
     except Exception as e:
         logger.error(f"Error processing request: {str(e)}")
-        error_blocks = [
-            {"text": "# Error Processing Request\n\n"},
-            {"text": f"I encountered an error while processing your query: {str(e)}\n\n"},
-            {"text": "Please try again or rephrase your question."}
-        ]
+        error_response = f"# Error Processing Request\n\nI encountered an error while processing your query: {str(e)}\n\nPlease try again or rephrase your question."
         return {
             'statusCode': 500,
             'headers': {
@@ -781,6 +786,6 @@ def handler(event, context):
             },
             'body': json.dumps({
                 'error': str(e),
-                'response': error_blocks
+                'response': error_response
             })
         }

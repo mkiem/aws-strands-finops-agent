@@ -130,10 +130,14 @@ finops_agent_lambda.zip
 *-lambda.zip
 package/
 packaging/
+build/
+dist/
 
 # UI deployment packages and iterations
 finops-ui/deployment-package-*/
 finops-ui/finops-ui-*.zip
+finops-ui/build/
+finops-ui/.cache/
 
 # Agent-specific build artifacts
 aws-cost-forecast-agent/*.zip
@@ -145,19 +149,124 @@ websocket-api/build/*.zip
 # Lambda packaging directories
 */packaging/_dependencies/
 */layer/
+*/.venv/
+*/venv/
 
 # CloudFormation outputs and generated configs
 cloudformation-outputs/
 *-outputs.json
 *-stack-outputs.json
 
+# Test directories and files
+test_*.py
+*_test.py
+tests/temp/
+tests/output/
+tests/artifacts/
+
 # Documentation that can be regenerated
 strands_documentation.md
 strands_documentation_raw.json
+STRANDS_SDK_README.md
 
-# Deployment temporary files
+# Deployment and infrastructure temporary files
 deployment-package-*/
 *-deployment.zip
+infrastructure/temp/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+*.tmp
+*.temp
+*~
+
+# Python virtual environments and cache
+.Python
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node.js cache and temporary files
+.npm
+.eslintcache
+.parcel-cache
+
+# AWS CDK
+cdk.out/
+cdk.context.json
+
+# Terraform (if used)
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# MacOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
 
 # Unused directories
 finops-agent-ui/
@@ -166,18 +275,25 @@ archive/
 backup/
 deprecated/
 
-# Additional cache and temporary files
-.pytest_cache/
-.coverage
-htmlcov/
-
-# AWS CDK
-cdk.out/
-cdk.context.json
+# Large files that shouldn't be in git
+*.dmg
+*.iso
+*.tar
+*.tar.gz
+*.rar
+*.7z
 
 # Sensitive files (additional protection)
 *.pem
 *.key
 *.crt
+*.p12
+*.pfx
 secrets.json
+config.json
 credentials.json
+
+# Generated documentation
+docs/generated/
+api-docs/
+coverage-report/

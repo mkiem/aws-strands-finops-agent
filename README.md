@@ -48,6 +48,18 @@ cd strands_doc_scraper
 ./run_scraper.sh
 ```
 
+## Architecture Diagrams
+
+📊 **[View Complete Architecture Diagrams](ARCHITECTURE_DIAGRAMS.md)**
+
+The project includes comprehensive architecture diagrams showing:
+- High-level system architecture
+- Agent orchestration and routing flow
+- WebSocket real-time processing
+- Data flow and AWS services integration
+- Frontend integration and authentication
+- Tool selection and LLM decision flow
+
 ## Components
 
 ### Main FinOps Agent (`my_agent/`)

@@ -15,33 +15,71 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 @tool
-def get_aws_cost_summary(time_period="MONTH_TO_DATE"):
+def get_aws_cost_summary(time_period="MONTH_TO_DATE", start_date="", end_date=""):
     """
     Get a summary of AWS costs for the specified time period.
     
     Args:
-        time_period: The time period for the cost data (e.g., MONTH_TO_DATE, LAST_MONTH)
+        time_period: The time period for the cost data. Options:
+            - "MONTH_TO_DATE": Current month from 1st to today
+            - "LAST_MONTH": Previous complete month
+            - "LAST_30_DAYS": Last 30 days from today
+            - "CUSTOM": Use custom start_date and end_date (format: YYYY-MM-DD)
+            - "APRIL_2025": April 2025 (2025-04-01 to 2025-04-30)
+            - "MAY_2025": May 2025 (2025-05-01 to 2025-05-31)
+            - "MARCH_2025": March 2025 (2025-03-01 to 2025-03-31)
+        start_date: Custom start date in YYYY-MM-DD format (only used with CUSTOM time_period)
+        end_date: Custom end date in YYYY-MM-DD format (only used with CUSTOM time_period)
         
     Returns:
-        A summary of AWS costs
+        A summary of AWS costs including time period and cost breakdown by service
     """
     # Use the region from environment variable
     region = os.environ.get('REGION', 'us-east-1')
     ce = boto3.client('ce', region_name=region)
     
-    # Define time period
-    end_date = datetime.now().strftime('%Y-%m-%d')
+    # Define time period based on input
+    current_date = datetime.now()
     
     if time_period == "MONTH_TO_DATE":
-        start_date = datetime.now().replace(day=1).strftime('%Y-%m-%d')
+        start_date = current_date.replace(day=1).strftime('%Y-%m-%d')
+        end_date = current_date.strftime('%Y-%m-%d')
     elif time_period == "LAST_MONTH":
-        first_of_month = datetime.now().replace(day=1)
+        first_of_month = current_date.replace(day=1)
         last_month_end = first_of_month - timedelta(days=1)
         start_date = last_month_end.replace(day=1).strftime('%Y-%m-%d')
         end_date = last_month_end.strftime('%Y-%m-%d')
+    elif time_period == "LAST_30_DAYS":
+        start_date = (current_date - timedelta(days=30)).strftime('%Y-%m-%d')
+        end_date = current_date.strftime('%Y-%m-%d')
+    elif time_period == "APRIL_2025":
+        start_date = "2025-04-01"
+        end_date = "2025-04-30"
+    elif time_period == "MAY_2025":
+        start_date = "2025-05-01"
+        end_date = "2025-05-31"
+    elif time_period == "MARCH_2025":
+        start_date = "2025-03-01"
+        end_date = "2025-03-31"
+    elif time_period == "CUSTOM":
+        if not start_date or not end_date:
+            return {"error": "Custom time period requires both start_date and end_date parameters"}
     else:
-        # Default to last 30 days
-        start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        # Try to parse month names and years
+        time_period_lower = time_period.lower()
+        if "april" in time_period_lower and "2025" in time_period_lower:
+            start_date = "2025-04-01"
+            end_date = "2025-04-30"
+        elif "may" in time_period_lower and "2025" in time_period_lower:
+            start_date = "2025-05-01"
+            end_date = "2025-05-31"
+        elif "march" in time_period_lower and "2025" in time_period_lower:
+            start_date = "2025-03-01"
+            end_date = "2025-03-31"
+        else:
+            # Default to last 30 days
+            start_date = (current_date - timedelta(days=30)).strftime('%Y-%m-%d')
+            end_date = current_date.strftime('%Y-%m-%d')
     
     try:
         response = ce.get_cost_and_usage(
@@ -69,20 +107,32 @@ def get_aws_cost_summary(time_period="MONTH_TO_DATE"):
         return {"error": str(e)}
 
 # Define the FinOps system prompt
-FINOPS_SYSTEM_PROMPT = """You are a FinOps assistant for AWS. You can:
+FINOPS_SYSTEM_PROMPT = """You are a FinOps assistant for AWS cost analysis and optimization. You have access to these tools:
 
-1. Analyze AWS cost data
-2. Provide cost optimization recommendations
-3. Explain AWS pricing models
-4. Help with cost allocation and tagging strategies
+1. **get_aws_cost_summary(time_period, start_date, end_date)**: Get AWS cost data for specific time periods
+   - For specific months, use: "APRIL_2025", "MAY_2025", "MARCH_2025", etc.
+   - For relative periods, use: "MONTH_TO_DATE", "LAST_MONTH", "LAST_30_DAYS"
+   - For custom dates, use: time_period="CUSTOM", start_date="YYYY-MM-DD", end_date="YYYY-MM-DD"
+
+2. **current_time()**: Get the current date and time for context
+
+3. **calculator()**: Perform calculations for cost analysis
+
+IMPORTANT TOOL USAGE GUIDELINES:
+- When users ask for specific months (like "April costs"), use the appropriate month parameter like "APRIL_2025"
+- Always check the returned time_period in the response to ensure you got the right data
+- If the time period doesn't match what was requested, try a different parameter
+- For recent data, use "MONTH_TO_DATE" or "LAST_MONTH"
 
 When analyzing costs:
 1. Focus on the most expensive services first
-2. Look for unusual spending patterns
+2. Look for unusual spending patterns  
 3. Identify resources that might be underutilized
 4. Suggest appropriate instance sizing and purchasing options
+5. Always format costs clearly with dollar signs and proper formatting
 
 Always provide clear, actionable recommendations and explain the potential cost savings.
+If you cannot get the exact time period requested, explain what data you were able to retrieve and suggest alternatives.
 """
 
 def extract_cost_data(response_text: str) -> Dict[str, Any]:
@@ -139,7 +189,7 @@ def format_cost_response(
     service_name: str = ""
 ) -> Dict[str, Any]:
     """
-    Format the agent's response into structured content blocks for better readability.
+    Format the agent's response into a clean markdown string for better readability.
     
     Args:
         query: The original user query
@@ -152,29 +202,37 @@ def format_cost_response(
         service_name: The AWS service name
         
     Returns:
-        A formatted response dictionary with headers and content blocks
+        A formatted response dictionary with clean markdown content
     """
-    # Create structured content blocks
-    content_blocks = [
-        {"text": f"# {service_name} Cost Summary\n\n"},
-        {"text": f"## Total Cost: ${cost_value:.2f} {currency}\n\n"}
-    ]
+    # Build clean markdown response
+    markdown_response = f"# {service_name} Cost Summary\n\n"
+    markdown_response += f"## Total Cost: ${cost_value:.2f} {currency}\n\n"
     
     # Add time period if available
     if start_date and end_date:
-        content_blocks.append({"text": f"**Time Period**: {start_date} to {end_date}\n\n"})
+        markdown_response += f"**Time Period**: {start_date} to {end_date}\n\n"
     
     # Add usage information if available
     if usage_units > 0:
-        content_blocks.append({"text": f"**Usage**: {format(usage_units, ',')} units\n\n"})
+        markdown_response += f"**Usage**: {format(usage_units, ',')} units\n\n"
     
-    # Add separator and additional information
-    content_blocks.append({"text": f"---\n\n"})
+    # Add separator
+    markdown_response += "---\n\n"
     
-    # Extract any explanatory text from the response
-    # This is a simple approach - you might want to use more sophisticated parsing
-    explanation = response_text.split("**")[2] if "**" in response_text else response_text
-    content_blocks.append({"text": explanation})
+    # Add clean explanatory text
+    if cost_value > 0:
+        markdown_response += f"This represents your {service_name} costs"
+        if start_date and end_date:
+            markdown_response += f" from {start_date} to {end_date}"
+        markdown_response += ".\n\n"
+        
+        if usage_units > 0:
+            markdown_response += f"Your usage totaled {format(usage_units, ',')} units during this period.\n\n"
+        
+        markdown_response += "Would you like me to provide cost optimization recommendations or analyze specific aspects of your spending?"
+    else:
+        markdown_response += f"No significant {service_name} costs were found for the specified period.\n\n"
+        markdown_response += "This could indicate minimal usage or that costs haven't been processed yet."
     
     # Format the complete response
     formatted_response = {
@@ -187,7 +245,7 @@ def format_cost_response(
         },
         'body': json.dumps({
             'query': query,
-            'response': content_blocks
+            'response': markdown_response
         })
     }
     
@@ -281,16 +339,15 @@ def handler(event, context):
                 "service_name": "Amazon S3"
             }
             
-            # Create a more complete response with the example data
-            content_blocks = [
-                {"text": f"# Amazon S3 Cost Summary\n\n"},
-                {"text": f"## Total Cost: ${cost_data['cost_value']:.2f} {cost_data['currency']}\n\n"},
-                {"text": f"**Time Period**: {cost_data['start_date']} to {cost_data['end_date']} (first 9 days of June 2025)\n\n"},
-                {"text": f"**Usage**: {format(cost_data['usage_units'], ',')} units\n\n"},
-                {"text": f"---\n\n"},
-                {"text": f"This represents your Amazon Simple Storage Service (S3) costs for approximately the first 9 days of June 2025.\n\n"},
-                {"text": f"Would you like me to provide any cost optimization recommendations for your S3 usage, or do you need information about specific aspects of your S3 spending?"}
-            ]
+            # Create a clean markdown response
+            markdown_response = f"# Amazon S3 Cost Summary\n\n"
+            markdown_response += f"## Total Cost: ${cost_data['cost_value']:.2f} {cost_data['currency']}\n\n"
+            markdown_response += f"**Time Period**: {cost_data['start_date']} to {cost_data['end_date']} (first 9 days of June 2025)\n\n"
+            markdown_response += f"**Usage**: {format(cost_data['usage_units'], ',')} units\n\n"
+            markdown_response += f"---\n\n"
+            markdown_response += f"This represents your Amazon Simple Storage Service (S3) costs for approximately the first 9 days of June 2025.\n\n"
+            markdown_response += f"Your usage totaled {format(cost_data['usage_units'], ',')} units during this period.\n\n"
+            markdown_response += f"Would you like me to provide any cost optimization recommendations for your S3 usage, or do you need information about specific aspects of your S3 spending?"
             
             formatted_response = {
                 'statusCode': 200,
@@ -302,26 +359,30 @@ def handler(event, context):
                 },
                 'body': json.dumps({
                     'query': query,
-                    'response': content_blocks
+                    'response': markdown_response
                 })
             }
             
             return formatted_response
         
-        # Extract cost data from the response
+        # Extract cost data from the response for potential use
         cost_data = extract_cost_data(response_text)
         
-        # Format the response with content blocks
-        formatted_response = format_cost_response(
-            query=query,
-            response_text=response_text,
-            cost_value=cost_data["cost_value"],
-            currency=cost_data["currency"],
-            start_date=cost_data["start_date"],
-            end_date=cost_data["end_date"],
-            usage_units=cost_data["usage_units"],
-            service_name=cost_data["service_name"]
-        )
+        # Use the full LLM response instead of the formatted summary
+        # The LLM already provides detailed, well-formatted analysis
+        formatted_response = {
+            'statusCode': 200,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'
+            },
+            'body': json.dumps({
+                'query': query,
+                'response': response_text  # Use the full LLM response
+            })
+        }
         
         return formatted_response
         

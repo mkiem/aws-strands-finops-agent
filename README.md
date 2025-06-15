@@ -305,11 +305,10 @@ curl -X POST \
   - **CloudFormation Stack**: aws-cost-forecast-agent
   - **S3 Package**: s3://finops-deployment-packages-062025/aws_cost_forecast_agent_lambda.zip
   - **Runtime**: Python 3.11 with Lambda layer for dependencies
-  - **Memory**: 512MB (upgraded from 256MB for better performance)
-  - **Timeout**: 300 seconds (upgraded from 60s to handle complex forecasting operations)
+  - **Memory**: 512MB, Timeout: 300 seconds (5 minutes)
   - **Capabilities**: Current cost analysis, historical cost trends, cost forecasting up to 12 months
   - **Performance**: ✅ Fixed timeout issues - now handles complex Cost Explorer API operations
-  - **Last Updated**: 2025-06-14 ✅ **TIMEOUT FIXED** - Increased timeout and memory for reliable forecasting
+  - **Last Updated**: 2025-06-15 ✅ **REVERTED OPTIMIZATIONS** - Reverted boto3 client and memory changes due to minimal performance impact
 - **Trusted Advisor Agent**: trusted-advisor-agent-trusted-advisor-agent (Strands-based cost optimization agent)
   - **Status**: ✅ Successfully deployed and fully functional
   - **Function ARN**: arn:aws:lambda:us-east-1:837882009522:function:trusted-advisor-agent-trusted-advisor-agent

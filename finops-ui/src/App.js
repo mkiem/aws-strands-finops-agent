@@ -121,6 +121,123 @@ function App({ signOut, user }) {
         });
         break;
         
+      case 'analysis_error':
+        console.error('Streaming supervisor failed:', message.error, 'WebSocket message:', message);
+        
+        // Check if we have partial results to show
+        setResponse(prevResponse => {
+          if (prevResponse && prevResponse.type === 'streaming' && prevResponse.jobId === message.jobId) {
+            // If we have some completed agents, show partial results
+            if (prevResponse.completed_agents && prevResponse.completed_agents.length > 0) {
+              const partialResponse = `# 🏦 AWS FinOps Analysis (Partial Results)
+
+⚠️ **Analysis Status**: Completed with ${prevResponse.completed_agents.length} of ${prevResponse.total_agents} services available.
+
+**What happened**: Some services took longer than expected to respond, but we were able to provide analysis from the available services.
+
+---
+
+${Object.values(prevResponse.results).map(result => result.content || '').join('\n\n')}
+
+---
+
+💡 **Note**: For complete analysis, please try again in a few moments when all services are responsive.`;
+
+              return {
+                query: prevResponse.query || '',
+                response: partialResponse,
+                agent: "AWS-FinOps-Supervisor",
+                timestamp: new Date().toISOString(),
+                partial: true
+              };
+            }
+          }
+          
+          // No partial results available
+          return {
+            query: prevResponse?.query || '',
+            response: `# ⚠️ Analysis Temporarily Unavailable
+
+I apologize, but I'm currently unable to provide a comprehensive analysis due to service timeouts.
+
+**What happened**: The analysis services took longer than expected to respond.
+
+**Next steps**:
+1. Please try your request again in 1-2 minutes
+2. For urgent needs, you can ask for specific analysis (e.g., "What are my AWS costs?" or "Show me optimization recommendations")
+
+*I'll be ready to provide your complete FinOps analysis as soon as all services are responsive.*`,
+            agent: "AWS-FinOps-Supervisor",
+            timestamp: new Date().toISOString(),
+            error: true
+          };
+        });
+        
+        setLoading(false);
+        setProgress(0);
+        setProgressMessage('');
+        setCurrentJobId(null);
+        break;
+        
+      case 'analysis_timeout':
+        console.log('Analysis timeout - some agents completed:', message);
+        
+        // Show partial results if available
+        setResponse(prevResponse => {
+          if (prevResponse && prevResponse.type === 'streaming' && prevResponse.jobId === message.jobId) {
+            // If we have some completed agents, show partial results
+            if (message.completed_agents && message.completed_agents.length > 0) {
+              const partialResponse = `# 🏦 AWS FinOps Analysis (Partial Results)
+
+⚠️ **Analysis Status**: Completed with ${message.completed_agents.length} of ${message.total_agents} services available.
+
+**What happened**: Some services took longer than expected to respond (over 5 minutes), but we were able to provide analysis from the available services.
+
+---
+
+${Object.values(prevResponse.results).map(result => result.content || '').join('\n\n')}
+
+---
+
+💡 **Note**: For complete analysis, please try again in a few moments. Complex queries may take longer during peak usage.`;
+
+              return {
+                query: prevResponse.query || '',
+                response: partialResponse,
+                agent: "AWS-FinOps-Supervisor",
+                timestamp: new Date().toISOString(),
+                partial: true
+              };
+            }
+          }
+          
+          // No partial results available
+          return {
+            query: prevResponse?.query || '',
+            response: `# ⚠️ Analysis Taking Longer Than Expected
+
+Your comprehensive analysis is taking longer than usual to complete.
+
+**What happened**: The analysis services are experiencing high load or complex processing requirements.
+
+**Next steps**:
+1. **Try a simpler query first**: "What are my AWS costs?" or "Show me optimization recommendations"
+2. **Wait and retry**: Complex comprehensive analysis may take 5-10 minutes during peak times
+3. **Break down your request**: Ask for specific aspects separately
+
+*Thank you for your patience. I'm working to provide you with the most accurate and comprehensive analysis possible.*`,
+            agent: "AWS-FinOps-Supervisor",
+            timestamp: new Date().toISOString(),
+            timeout: true
+          };
+        });
+        
+        setLoading(false);
+        setProgress(Math.max(50, (message.completed_agents.length / message.total_agents) * 100));
+        setProgressMessage(`Partial analysis available (${message.completed_agents.length}/${message.total_agents} services)`);
+        setCurrentJobId(null);
+        break;
+        
       case 'job_completed':
         setLoading(false);
         setProgress(100);

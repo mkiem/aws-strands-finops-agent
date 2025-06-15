@@ -10,7 +10,7 @@ import logging
 import concurrent.futures
 import uuid
 import time
-from typing import Dict, Any, Optional, List, Callable
+from typing import Dict, Any, Optional, List, Callable, Tuple
 from llm_router_simple import EnhancedLLMQueryRouter
 from intelligent_finops_supervisor import IntelligentFinOpsSupervisor
 
@@ -93,6 +93,106 @@ def extract_query(event: dict) -> Optional[str]:
             return event["query"]
     
     return None
+
+def should_proceed_with_synthesis(responses: Dict[str, Any], min_success_ratio: float = 0.67) -> Tuple[bool, Dict[str, Any], List[str]]:
+    """
+    Determine if we have enough successful responses to proceed with synthesis.
+    
+    Args:
+        responses: Agent responses (including errors)
+        min_success_ratio: Minimum ratio of successful agents (default: 67%)
+    
+    Returns:
+        (should_proceed, successful_responses_only, failed_agents)
+    """
+    successful_responses = {}
+    failed_agents = []
+    
+    for agent, response in responses.items():
+        if response.get('error'):
+            failed_agents.append(agent)
+            logger.warning(f"Agent {agent} failed: {response['error']}")
+        else:
+            successful_responses[agent] = response
+            logger.info(f"Agent {agent} succeeded")
+    
+    success_ratio = len(successful_responses) / len(responses) if responses else 0
+    should_proceed = success_ratio >= min_success_ratio
+    
+    logger.info(f"Success analysis: {len(successful_responses)}/{len(responses)} agents succeeded "
+               f"({success_ratio:.1%}). Threshold: {min_success_ratio:.1%}. Proceed: {should_proceed}")
+    
+    return should_proceed, successful_responses, failed_agents
+
+def format_partial_success_response(successful_responses: Dict[str, Any], 
+                                  failed_agents: List[str], 
+                                  synthesis_result: str,
+                                  query: str) -> str:
+    """Format response when some agents succeed and others fail."""
+    
+    # Map agent names to user-friendly names
+    agent_display_names = {
+        'cost_forecast': 'Cost Analysis',
+        'aws-cost-forecast-agent': 'Cost Analysis',
+        'trusted_advisor': 'Optimization Recommendations',
+        'trusted-advisor-agent-trusted-advisor-agent': 'Optimization Recommendations',
+        'budget_management': 'Budget Management',
+        'budget-management-agent': 'Budget Management'
+    }
+    
+    successful_names = [agent_display_names.get(agent, agent) for agent in successful_responses.keys()]
+    failed_names = [agent_display_names.get(agent, agent) for agent in failed_agents]
+    
+    response = f"# 🏦 AWS FinOps Analysis (Partial Results)\n\n"
+    response += f"⚠️ **Analysis Status**: Completed with {len(successful_responses)} of {len(successful_responses) + len(failed_agents)} services available.\n\n"
+    
+    if successful_names:
+        response += f"✅ **Available Analysis**: {', '.join(successful_names)}\n\n"
+    
+    if failed_names:
+        response += f"❌ **Temporarily Unavailable**: {', '.join(failed_names)}\n\n"
+    
+    response += "---\n\n"
+    response += synthesis_result
+    response += f"\n\n---\n\n"
+    response += f"💡 **Note**: This analysis is based on available data. For complete insights including {', '.join(failed_names)}, please try again in a few moments when all services are responsive."
+    
+    return response
+
+def format_insufficient_success_response(successful_responses: Dict[str, Any], 
+                                       failed_agents: List[str], 
+                                       query: str) -> str:
+    """Format response when too few agents succeeded to provide meaningful analysis."""
+    
+    agent_display_names = {
+        'cost_forecast': 'Cost Analysis',
+        'aws-cost-forecast-agent': 'Cost Analysis', 
+        'trusted_advisor': 'Optimization Recommendations',
+        'trusted-advisor-agent-trusted-advisor-agent': 'Optimization Recommendations',
+        'budget_management': 'Budget Management',
+        'budget-management-agent': 'Budget Management'
+    }
+    
+    successful_names = [agent_display_names.get(agent, agent) for agent in successful_responses.keys()]
+    failed_names = [agent_display_names.get(agent, agent) for agent in failed_agents]
+    
+    response = f"# ⚠️ Analysis Temporarily Unavailable\n\n"
+    response += f"I apologize, but I'm currently unable to provide a comprehensive analysis for your request: \"{query}\"\n\n"
+    response += f"**Current Status**:\n"
+    response += f"- ❌ Unavailable: {', '.join(failed_names)}\n"
+    
+    if successful_names:
+        response += f"- ✅ Available: {', '.join(successful_names)}\n"
+    
+    response += f"\n**What happened**: {len(failed_agents)} of {len(successful_responses) + len(failed_agents)} required services are temporarily unresponsive, "
+    response += f"which prevents me from providing the comprehensive analysis you requested.\n\n"
+    response += f"**Next steps**:\n"
+    response += f"1. Please try your request again in 1-2 minutes\n"
+    response += f"2. If the issue persists, you can ask for specific analysis from available services\n"
+    response += f"3. For urgent needs, contact your AWS support team\n\n"
+    response += f"*I'll be ready to provide your complete FinOps analysis as soon as all services are responsive.*"
+    
+    return response
 
 def get_enhanced_supervisor_agent():
     """Initialize and return the enhanced intelligent supervisor agent."""
@@ -192,7 +292,7 @@ def get_enhanced_supervisor_agent():
     
     def execute_agents_parallel_streaming(agents_to_invoke: List[str], query: str, 
                                         connection_id: str = None, job_id: str = None) -> Dict[str, Any]:
-        """Execute multiple agents in parallel with streaming support."""
+        """Execute multiple agents in parallel with streaming support and proper timeout handling."""
         agent_functions = {
             'cost_forecast': invoke_cost_forecast_agent,
             'aws-cost-forecast-agent': invoke_cost_forecast_agent,
@@ -214,40 +314,70 @@ def get_enhanced_supervisor_agent():
                     agent_tasks[agent_name] = executor.submit(agent_functions[agent_name], query)
                     logger.info(f"Submitted {agent_name} agent task")
             
-            # Stream results as they complete
-            for future in concurrent.futures.as_completed(agent_tasks.values(), timeout=35):
-                # Find which agent completed
-                completed_agent = None
-                for agent_name, agent_future in agent_tasks.items():
-                    if agent_future == future:
-                        completed_agent = agent_name
-                        break
-                
-                if completed_agent:
-                    try:
-                        result = future.result(timeout=5)
-                        responses[completed_agent] = result
-                        completed_agents.append(completed_agent)
-                        
-                        logger.info(f"Completed {completed_agent} agent invocation")
-                        
-                        # Stream individual result if WebSocket available
-                        if connection_id:
-                            formatted_result = format_individual_agent_result(completed_agent, result)
+            # Stream results as they complete with proper timeout handling
+            try:
+                # Use a longer timeout (5 minutes) to handle complex queries
+                for future in concurrent.futures.as_completed(agent_tasks.values(), timeout=300):
+                    # Find which agent completed
+                    completed_agent = None
+                    for agent_name, agent_future in agent_tasks.items():
+                        if agent_future == future:
+                            completed_agent = agent_name
+                            break
+                    
+                    if completed_agent:
+                        try:
+                            # FIXED: Remove timeout for result extraction since the future is already completed
+                            # The agent has already finished, so result() should return immediately
+                            result = future.result()
+                            responses[completed_agent] = result
+                            completed_agents.append(completed_agent)
                             
-                            send_websocket_message(connection_id, {
-                                'type': 'agent_completed',
-                                'jobId': job_id,
-                                'agent': completed_agent,
-                                'result': formatted_result,
-                                'progress': int((len(completed_agents) / len(agents_to_invoke)) * 100),
-                                'completed_agents': completed_agents,
-                                'total_agents': len(agents_to_invoke)
-                            })
+                            logger.info(f"Completed {completed_agent} agent invocation")
+                            
+                            # Stream individual result if WebSocket available
+                            if connection_id:
+                                formatted_result = format_individual_agent_result(completed_agent, result)
+                                
+                                send_websocket_message(connection_id, {
+                                    'type': 'agent_completed',
+                                    'jobId': job_id,
+                                    'agent': completed_agent,
+                                    'result': formatted_result,
+                                    'progress': int((len(completed_agents) / len(agents_to_invoke)) * 100),
+                                    'completed_agents': completed_agents,
+                                    'total_agents': len(agents_to_invoke)
+                                })
+                            
+                        except Exception as e:
+                            logger.error(f"Error getting result from {completed_agent} agent: {str(e)}")
+                            responses[completed_agent] = {"error": f"{completed_agent} agent error: {str(e)}"}
+                            
+            except concurrent.futures.TimeoutError:
+                # Handle overall timeout - some agents didn't complete in 5 minutes
+                logger.error(f"Overall timeout waiting for agents. Completed: {len(completed_agents)}/{len(agents_to_invoke)}")
+                
+                # Mark remaining agents as timed out
+                for agent_name, future in agent_tasks.items():
+                    if agent_name not in responses:
+                        logger.error(f"Agent {agent_name} did not complete within timeout")
+                        responses[agent_name] = {"error": f"{agent_name} agent timeout after 5 minutes"}
                         
-                    except concurrent.futures.TimeoutError:
-                        logger.error(f"Timeout waiting for {completed_agent} agent")
-                        responses[completed_agent] = {"error": f"{completed_agent} agent timeout after 30 seconds"}
+                        # Cancel the future to clean up
+                        future.cancel()
+                
+                # Send timeout notification via WebSocket
+                if connection_id:
+                    send_websocket_message(connection_id, {
+                        'type': 'analysis_timeout',
+                        'jobId': job_id,
+                        'completed_agents': completed_agents,
+                        'total_agents': len(agents_to_invoke),
+                        'message': f'Analysis partially completed: {len(completed_agents)}/{len(agents_to_invoke)} agents responded'
+                    })
+        
+        logger.info(f"Streaming processing completed. Received {len(responses)} responses.")
+        return responses
                     except Exception as e:
                         logger.error(f"Error getting result from {completed_agent} agent: {str(e)}")
                         responses[completed_agent] = {"error": f"{completed_agent} agent error: {str(e)}"}
@@ -330,38 +460,97 @@ def get_enhanced_supervisor_agent():
                     else:
                         responses = execute_agents_parallel(agents_to_invoke, query)
                     
-                    # Perform intelligent synthesis
-                    synthesis_start = time.time()
-                    final_response = supervisor.synthesize_responses(query, responses, routing_context)
-                    synthesis_time = time.time() - synthesis_start
+                    # PHASE 1 FIX: Implement graceful degradation
+                    should_proceed, successful_responses, failed_agents = should_proceed_with_synthesis(responses)
                     
-                    processing_time = time.time() - start_time
-                    logger.info(f"Synthesis processing completed in {processing_time:.2f}s "
-                              f"(synthesis: {synthesis_time:.2f}s)")
+                    if should_proceed:
+                        # Sufficient successful responses - proceed with synthesis
+                        logger.info(f"Proceeding with synthesis using {len(successful_responses)} successful responses")
+                        
+                        # Update routing context for synthesis
+                        synthesis_routing_context = routing_context.copy()
+                        synthesis_routing_context['successful_agents'] = list(successful_responses.keys())
+                        synthesis_routing_context['failed_agents'] = failed_agents
+                        
+                        # Perform intelligent synthesis with successful responses only
+                        synthesis_start = time.time()
+                        synthesis_result = supervisor.synthesize_responses(query, successful_responses, synthesis_routing_context)
+                        synthesis_time = time.time() - synthesis_start
+                        
+                        # Format final response based on whether we have partial or complete success
+                        if failed_agents:
+                            # Partial success - some agents failed
+                            final_response = format_partial_success_response(
+                                successful_responses, failed_agents, synthesis_result, query
+                            )
+                            logger.info(f"Partial synthesis completed: {len(successful_responses)} successful, {len(failed_agents)} failed")
+                        else:
+                            # Complete success - all agents succeeded
+                            final_response = synthesis_result
+                            logger.info(f"Complete synthesis completed: all {len(successful_responses)} agents successful")
+                        
+                        processing_time = time.time() - start_time
+                        logger.info(f"Synthesis processing completed in {processing_time:.2f}s "
+                                  f"(synthesis: {synthesis_time:.2f}s)")
+                        
+                    else:
+                        # Insufficient successful responses - cannot provide meaningful synthesis
+                        logger.warning(f"Insufficient successful responses for synthesis: {len(successful_responses)}/{len(responses)}")
+                        final_response = format_insufficient_success_response(successful_responses, failed_agents, query)
+                        
+                        processing_time = time.time() - start_time
+                        logger.info(f"Insufficient success processing completed in {processing_time:.2f}s")
                     
                     # Send final completion message for streaming
                     if connection_id:
-                        send_websocket_message(connection_id, {
+                        completion_message = {
                             'type': 'analysis_completed',
                             'jobId': job_id,
                             'final_response': final_response,
                             'total_agents': len(agents_to_invoke),
-                            'completed_agents': len(responses),
-                            'processing_time': f"Completed in {processing_time:.1f}s with intelligent synthesis",
-                            'synthesis_time': f"{synthesis_time:.1f}s"
-                        })
+                            'successful_agents': len(successful_responses),
+                            'failed_agents': len(failed_agents),
+                            'processing_time': f"Completed in {processing_time:.1f}s with intelligent synthesis"
+                        }
+                        
+                        # Add synthesis time if synthesis was performed
+                        if should_proceed:
+                            completion_message['synthesis_time'] = f"{synthesis_time:.1f}s"
+                            completion_message['analysis_status'] = 'partial' if failed_agents else 'complete'
+                        else:
+                            completion_message['analysis_status'] = 'insufficient_data'
+                        
+                        send_websocket_message(connection_id, completion_message)
                     
                     return final_response, routing_decision
                 
                 else:
-                    # AGGREGATION PATH: Simple template-based combination
+                    # AGGREGATION PATH: Simple template-based combination with graceful degradation
                     logger.info(f"Aggregation path: {len(agents_to_invoke)} agents with simple aggregation")
                     
                     # Execute agents in parallel
                     responses = execute_agents_parallel(agents_to_invoke, query)
                     
-                    # Use simple aggregation (existing logic)
-                    final_response = build_simple_aggregation(routing_explanation, responses)
+                    # PHASE 1 FIX: Apply graceful degradation to aggregation path too
+                    should_proceed, successful_responses, failed_agents = should_proceed_with_synthesis(responses, min_success_ratio=0.5)  # Lower threshold for aggregation
+                    
+                    if should_proceed:
+                        # Use simple aggregation with successful responses only
+                        if failed_agents:
+                            # Partial success
+                            aggregation_result = build_simple_aggregation(routing_explanation, successful_responses)
+                            final_response = format_partial_success_response(
+                                successful_responses, failed_agents, aggregation_result, query
+                            )
+                            logger.info(f"Partial aggregation completed: {len(successful_responses)} successful, {len(failed_agents)} failed")
+                        else:
+                            # Complete success
+                            final_response = build_simple_aggregation(routing_explanation, successful_responses)
+                            logger.info(f"Complete aggregation completed: all {len(successful_responses)} agents successful")
+                    else:
+                        # Insufficient successful responses
+                        logger.warning(f"Insufficient successful responses for aggregation: {len(successful_responses)}/{len(responses)}")
+                        final_response = format_insufficient_success_response(successful_responses, failed_agents, query)
                     
                     processing_time = time.time() - start_time
                     logger.info(f"Aggregation processing completed in {processing_time:.2f}s")
@@ -376,17 +565,25 @@ def get_enhanced_supervisor_agent():
     return enhanced_supervisor_agent
 
 def build_simple_aggregation(routing_explanation: str, responses: Dict[str, Any]) -> str:
-    """Build simple aggregated response without LLM synthesis."""
+    """
+    Build simple aggregated response without LLM synthesis.
+    
+    Note: This function now expects only successful responses (errors filtered out by graceful degradation).
+    """
     supervisor = IntelligentFinOpsSupervisor()
     
     combined_response = f"# 🏦 AWS FinOps Analysis\n\n{routing_explanation}\n\n"
     
     # Add each agent's response in separate sections
+    # Note: All responses should be successful since errors are filtered out before this function
     for agent_name, response in responses.items():
         agent_display_name = supervisor._get_agent_display_name(agent_name)
         agent_content = supervisor._extract_agent_content(response)
         
+        # Since we filter errors before calling this function, we should only have successful responses
+        # But keep error handling as a safety net
         if response.get("error"):
+            logger.warning(f"Unexpected error response in build_simple_aggregation for {agent_name}: {response['error']}")
             combined_response += f"## {agent_display_name}\n\n⚠️ {response['error']}\n\n"
         else:
             combined_response += f"## {agent_display_name}\n\n{agent_content}\n\n"

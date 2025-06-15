@@ -1,4 +1,4 @@
-"""Fast Path Query Router with LLM Fallback"""
+"""Fixed Enhanced LLM Router with Proper Comprehensive Query Handling"""
 
 import json
 import logging
@@ -8,16 +8,19 @@ from strands import Agent
 
 logger = logging.getLogger(__name__)
 
-class LLMQueryRouter:
+class EnhancedLLMQueryRouter:
+    """Enhanced router that includes synthesis recommendations for latency optimization."""
+    
     def __init__(self):
         self.routing_agent = Agent(
-            system_prompt="""You are an intelligent AWS FinOps query router. Analyze the user's query and route to appropriate agents based on intent and content.
+            system_prompt="""You are an intelligent AWS FinOps query router with synthesis optimization capabilities. 
+
+Analyze the user's query and route to appropriate agents based on intent and content, while also determining if intelligent synthesis is needed.
 
 Available agents:
 - cost_forecast: For queries about AWS costs, spending analysis, cost trends, forecasting, and historical cost data
 - trusted_advisor: For queries about cost optimization, savings opportunities, efficiency improvements, and resource recommendations  
 - budget_management: For queries about budgets, budget creation, budget recommendations, cost controls, spending limits, budget governance, and proactive cost management
-- comprehensive: For complex queries requiring analysis from multiple agents
 
 Routing Guidelines:
 - Single agent: Route to the most relevant agent when query has clear focus
@@ -26,261 +29,327 @@ Routing Guidelines:
 - Cost analysis: Route to cost_forecast for spending analysis and trends
 - Optimization: Route to trusted_advisor for savings and efficiency
 
-Respond with JSON only: {"agents": ["agent_name"], "reasoning": "brief explanation of routing decision"}
+Synthesis Guidelines:
+- synthesis_needed = false: Simple queries that just need information aggregation
+- synthesis_needed = true: Strategic queries requiring analysis, prioritization, or cross-domain insights
 
-Examples:
-- "What are my AWS costs?" → {"agents": ["cost_forecast"], "reasoning": "Cost analysis query"}
-- "How can I optimize spending?" → {"agents": ["trusted_advisor"], "reasoning": "Optimization recommendations needed"}
-- "What budgets should I create?" → {"agents": ["budget_management"], "reasoning": "Budget recommendations and governance"}
-- "I need complete cost analysis with budgets" → {"agents": ["cost_forecast", "budget_management"], "reasoning": "Multi-domain query requiring cost data and budget planning"}"""
+Examples of synthesis_needed = true:
+- "Which optimization recommendations would have the biggest impact on my cost trends?"
+- "How should I prioritize these recommendations?"
+- "What's the best strategy for balancing costs and optimization?"
+- "Create a roadmap for cost optimization"
+- "Compare and recommend the most important actions"
+
+Examples of synthesis_needed = false:
+- "Show me my costs and optimization recommendations"
+- "What are my costs? Also show me optimization opportunities"
+- "Display cost analysis and trusted advisor recommendations"
+
+Respond with JSON only: {
+    "agents": ["agent_name"], 
+    "reasoning": "brief explanation of routing decision",
+    "synthesis_needed": true/false,
+    "confidence": "high/medium/low"
+}"""
         )
     
-    def fast_route_query(self, query: str) -> Optional[Dict[str, Any]]:
-        """Enhanced fast routing with better multi-part query detection"""
+    def route_query(self, query: str) -> Dict[str, Any]:
+        """Route query with enhanced synthesis recommendations."""
         if not query or len(query.strip()) < 5:
-            return None  # Too short/unclear - use LLM
-            
-        query_lower = query.lower()
-        
-        # Multi-part query patterns (check these FIRST before complexity check)
-        forecast_budget_patterns = [
-            ('forecast' in query_lower and 'budget' in query_lower),
-            ('prediction' in query_lower and 'budget' in query_lower),
-            ('next' in query_lower and ('month' in query_lower or 'quarter' in query_lower) and 'budget' in query_lower),
-            ('future' in query_lower and 'budget' in query_lower),
-            ('future' in query_lower and 'spending limit' in query_lower),
-            ('cost' in query_lower and 'forecast' in query_lower and 'budget' in query_lower),
-        ]
-        
-        if any(forecast_budget_patterns):
             return {
-                "agents": ["cost_forecast", "budget_management"],
-                "reasoning": "Fast route: Forecast and budget planning query",
-                "routing_method": "fast_path_multi",
-                "confidence": "high"
+                "agents": ["cost_forecast"],
+                "reasoning": "Default routing to cost analysis for unclear query",
+                "synthesis_needed": False,
+                "confidence": "low",
+                "routing_method": "default"
             }
         
-        cost_optimization_patterns = [
-            ('cost' in query_lower and 'optim' in query_lower),
-            ('spending' in query_lower and 'reduc' in query_lower),
-            ('forecast' in query_lower and 'saving' in query_lower),
-            ('trend' in query_lower and 'recommend' in query_lower),
+        # Try fast routing first
+        fast_result = self.fast_route_query(query)
+        if fast_result:
+            return fast_result
+        
+        # Fall back to LLM routing
+        return self.llm_route_query(query)
+    
+    def fast_route_query(self, query: str) -> Optional[Dict[str, Any]]:
+        """Enhanced fast routing with synthesis recommendations."""
+        query_lower = query.lower()
+        
+        # COMPREHENSIVE ANALYSIS DETECTION (HIGHEST PRIORITY)
+        comprehensive_patterns = [
+            'comprehensive finops', 'complete finops', 'full finops',
+            'comprehensive analysis', 'complete analysis', 'full analysis',
+            'comprehensive aws', 'complete aws financial',
+            'all recommendations', 'everything', 'full review'
         ]
         
-        if any(cost_optimization_patterns):
+        if any(pattern in query_lower for pattern in comprehensive_patterns):
+            return {
+                "agents": ["cost_forecast", "trusted_advisor", "budget_management"],
+                "reasoning": "Fast route: Comprehensive FinOps analysis requested",
+                "synthesis_needed": True,  # Always synthesize comprehensive queries
+                "confidence": "high",
+                "routing_method": "fast_path_comprehensive"
+            }
+        
+        # STRATEGIC SYNTHESIS PATTERNS (HIGH PRIORITY)
+        strategic_synthesis_patterns = [
+            ('which', 'save', 'most'), ('which', 'biggest', 'impact'),
+            ('which', 'highest', 'priority'), ('which', 'most', 'important'),
+            ('what', 'best', 'strategy'), ('how', 'prioritize'),
+            ('compare', 'recommend'), ('most', 'cost', 'effective')
+        ]
+        
+        # Check for strategic patterns that need multiple agents
+        for pattern_tuple in strategic_synthesis_patterns:
+            if all(word in query_lower for word in pattern_tuple):
+                # These queries need both cost context and optimization data
+                return {
+                    "agents": ["cost_forecast", "trusted_advisor"],
+                    "reasoning": "Fast route: Strategic analysis requiring cost context and optimization data",
+                    "synthesis_needed": True,
+                    "confidence": "high",
+                    "routing_method": "fast_path_strategic"
+                }
+        
+        # Single agent patterns (no synthesis needed)
+        single_agent_patterns = {
+            'cost_forecast': [
+                'what are my costs', 'show me costs', 'cost analysis', 'spending analysis',
+                'cost trends', 'cost forecast', 'how much am i spending', 'cost breakdown',
+                'what are my aws costs', 'current costs'
+            ],
+            'trusted_advisor': [
+                'optimization recommendations', 'cost optimization', 'savings opportunities',
+                'efficiency recommendations', 'reduce costs', 'optimize spending',
+                'show me optimization', 'optimization opportunities'
+            ],
+            'budget_management': [
+                'budget recommendations', 'create budget', 'budget planning',
+                'spending limits', 'cost controls', 'budget governance'
+            ]
+        }
+        
+        # Check for single agent patterns (but not if strategic patterns already matched)
+        for agent, patterns in single_agent_patterns.items():
+            if any(pattern in query_lower for pattern in patterns):
+                # Check if it's ONLY asking for this agent's info (no other agent terms)
+                other_agents = [a for a in single_agent_patterns.keys() if a != agent]
+                has_other_agent_terms = any(
+                    any(pattern in query_lower for pattern in single_agent_patterns[other_agent])
+                    for other_agent in other_agents
+                )
+                
+                # Also check if it has strategic language that would need synthesis
+                has_strategic_language = any(
+                    all(word in query_lower for word in pattern_tuple)
+                    for pattern_tuple in strategic_synthesis_patterns
+                )
+                
+                if not has_other_agent_terms and not has_strategic_language:
+                    return {
+                        "agents": [agent],
+                        "reasoning": f"Fast route: Single {agent.replace('_', ' ')} query",
+                        "synthesis_needed": False,
+                        "confidence": "high",
+                        "routing_method": "fast_path_single"
+                    }
+        
+        # Multi-agent detection patterns
+        cost_terms = ['cost', 'spending', 'forecast', 'trend']
+        optimization_terms = ['optim', 'saving', 'reduc', 'efficiency', 'recommend']
+        budget_terms = ['budget', 'planning', 'control', 'limit']
+        
+        has_cost = any(term in query_lower for term in cost_terms)
+        has_optimization = any(term in query_lower for term in optimization_terms)
+        has_budget = any(term in query_lower for term in budget_terms)
+        
+        # Count how many domains are mentioned
+        domain_count = sum([has_cost, has_optimization, has_budget])
+        
+        # Synthesis vs aggregation patterns (FIXED LOGIC)
+        strong_synthesis_patterns = [
+            'which should i', 'what\'s the best', 'most important',
+            'biggest impact', 'highest priority', 'prioritize',
+            'strategy', 'roadmap', 'plan', 'balance'
+        ]
+        
+        # FIXED: Move comprehensive to strong synthesis
+        comprehensive_synthesis_patterns = [
+            'comprehensive', 'complete', 'full', 'holistic',
+            'integrate', 'combine', 'unified'
+        ]
+        
+        simple_aggregation_patterns = [
+            'show me', 'display', 'list', 'what are', 'give me',
+            'provide', 'tell me about', 'information about'
+        ]
+        
+        # Determine synthesis need (FIXED LOGIC)
+        has_strong_synthesis = any(pattern in query_lower for pattern in strong_synthesis_patterns)
+        has_comprehensive_request = any(pattern in query_lower for pattern in comprehensive_synthesis_patterns)
+        has_simple_aggregation = any(pattern in query_lower for pattern in simple_aggregation_patterns)
+        
+        # FIXED: Synthesis decision logic
+        if has_strong_synthesis or has_comprehensive_request:
+            needs_synthesis = True
+        elif has_simple_aggregation and not has_comprehensive_request:
+            needs_synthesis = False
+        else:
+            needs_synthesis = domain_count >= 2  # Default for multi-domain
+        
+        # Route based on domain combinations
+        if domain_count >= 3:
+            # 3+ domains = comprehensive analysis
+            return {
+                "agents": ["cost_forecast", "trusted_advisor", "budget_management"],
+                "reasoning": "Fast route: Multi-domain comprehensive analysis",
+                "synthesis_needed": True,  # Always synthesize for 3+ agents
+                "confidence": "high",
+                "routing_method": "fast_path_comprehensive"
+            }
+        
+        elif has_cost and has_optimization:
             return {
                 "agents": ["cost_forecast", "trusted_advisor"],
                 "reasoning": "Fast route: Cost analysis and optimization query",
-                "routing_method": "fast_path_multi",
-                "confidence": "high"
+                "synthesis_needed": needs_synthesis,
+                "confidence": "high",
+                "routing_method": "fast_path_multi"
             }
         
-        budget_optimization_patterns = [
-            ('budget' in query_lower and 'optim' in query_lower),
-            ('budget' in query_lower and 'recommend' in query_lower),
-            ('budget' in query_lower and 'saving' in query_lower),
-        ]
+        elif has_cost and has_budget:
+            return {
+                "agents": ["cost_forecast", "budget_management"],
+                "reasoning": "Fast route: Cost forecast and budget planning query",
+                "synthesis_needed": needs_synthesis,
+                "confidence": "high",
+                "routing_method": "fast_path_multi"
+            }
         
-        if any(budget_optimization_patterns):
+        elif has_optimization and has_budget:
             return {
                 "agents": ["budget_management", "trusted_advisor"],
                 "reasoning": "Fast route: Budget optimization query",
-                "routing_method": "fast_path_multi",
-                "confidence": "high"
+                "synthesis_needed": needs_synthesis,
+                "confidence": "high",
+                "routing_method": "fast_path_multi"
             }
         
-        # Three-way combinations that need comprehensive analysis
-        comprehensive_patterns = [
-            ('cost' in query_lower and 'optim' in query_lower and 'budget' in query_lower),
-            ('optimization' in query_lower and 'budget' in query_lower and 'planning' in query_lower),
-        ]
-        
-        if any(comprehensive_patterns):
-            return {
-                "agents": ["cost_forecast", "trusted_advisor", "budget_management"],
-                "reasoning": "Fast route: Multi-domain comprehensive query",
-                "routing_method": "fast_path_multi",
-                "confidence": "high"
-            }
-        
-        # Existing multi-domain patterns (check before complexity)
-        if ('cost' in query_lower and 'budget' in query_lower) or ('spending' in query_lower and 'budget' in query_lower):
-            return {
-                "agents": ["cost_forecast", "budget_management"], 
-                "reasoning": "Fast route: Cost analysis and budget planning",
-                "routing_method": "fast_path",
-                "confidence": "medium"
-            }
-        
-        if ('optim' in query_lower and 'cost' in query_lower) or ('saving' in query_lower and 'cost' in query_lower):
-            return {
-                "agents": ["cost_forecast", "trusted_advisor"], 
-                "reasoning": "Fast route: Cost analysis and optimization",
-                "routing_method": "fast_path",
-                "confidence": "medium"
-            }
-        
-        # Comprehensive analysis indicators
-        comprehensive_keywords = ['complete', 'comprehensive', 'full analysis', 'everything', 'all aspects', 'complete finops']
-        if any(word in query_lower for word in comprehensive_keywords):
-            return {
-                "agents": ["cost_forecast", "trusted_advisor", "budget_management"], 
-                "reasoning": "Fast route: Comprehensive analysis requested",
-                "routing_method": "fast_path",
-                "confidence": "high"
-            }
-        
-        # Complexity indicators that should force LLM routing (check AFTER patterns)
-        complexity_indicators = [
-            query_lower.count(' and ') >= 2,  # More than 2 "and" connections
-            '?' in query and query.count('?') > 1,  # Multiple questions
-            len(query.split()) > 20,  # Very long queries (increased threshold)
-            query_lower.count('what') > 2,  # More than 2 "what" questions
-            query_lower.count('how') > 1,  # Multiple "how" questions
-        ]
-        
-        if any(complexity_indicators):
-            logger.info("Complex query detected, forcing LLM routing")
-            return None  # Force LLM routing for complex queries
-        
-        # Enhanced single-agent routing with better mixed intent detection
-        
-        # High-confidence budget routing
-        budget_keywords = ['budget', 'spending limit', 'cost control', 'governance', 'budget recommendation', 'budget suggestions', 'spending controls']
-        if any(word in query_lower for word in budget_keywords):
-            # Enhanced mixed intent check
-            mixed_intent_keywords = [
-                'cost analysis', 'spending trend', 'optimize', 'savings', 
-                'forecast', 'prediction', 'trend', 'historical', 
-                'next month', 'future cost', 'recommend', 'efficiency'
-            ]
-            if any(word in query_lower for word in mixed_intent_keywords):
-                logger.info("Mixed intent detected in budget query, using LLM routing")
-                return None  # Mixed intent - use LLM for better routing
-            return {
-                "agents": ["budget_management"], 
-                "reasoning": "Fast route: Clear budget management query",
-                "routing_method": "fast_path",
-                "confidence": "high"
-            }
-        
-        # High-confidence cost analysis routing
-        cost_keywords = ['current cost', 'aws cost', 'spending', 'expense', 'bill', 'cost analysis', 'monthly cost', 'cost breakdown']
-        if any(word in query_lower for word in cost_keywords) and not any(word in query_lower for word in ['optim', 'reduc', 'saving']):
-            # Enhanced mixed intent check
-            if any(word in query_lower for word in ['budget', 'control', 'limit', 'recommend', 'optim']):
-                logger.info("Mixed intent detected in cost query, using LLM routing")
-                return None  # Mixed intent - use LLM
-            return {
-                "agents": ["cost_forecast"], 
-                "reasoning": "Fast route: Clear cost analysis query",
-                "routing_method": "fast_path",
-                "confidence": "high"
-            }
-        
-        # High-confidence optimization routing
-        optimization_keywords = ['optimize', 'saving', 'reduce cost', 'efficiency', 'recommendation', 'cost reduction', 'save money']
-        if any(word in query_lower for word in optimization_keywords):
-            # Enhanced mixed intent check
-            if any(word in query_lower for word in ['budget', 'current cost', 'spending analysis', 'forecast', 'trend']):
-                logger.info("Mixed intent detected in optimization query, using LLM routing")
-                return None  # Mixed intent - use LLM
-            return {
-                "agents": ["trusted_advisor"], 
-                "reasoning": "Fast route: Clear optimization query",
-                "routing_method": "fast_path",
-                "confidence": "high"
-            }
-        
-        # No clear fast path found - use LLM
-        logger.info("No clear fast path pattern found, using LLM routing")
-        return None
+        return None  # Fall back to LLM routing
     
-    
-    def route_query(self, query: str) -> Dict[str, Any]:
-        """Main routing with fast path + LLM fallback"""
-        start_time = time.time()
-        
+    def llm_route_query(self, query: str) -> Dict[str, Any]:
+        """Use LLM for complex routing decisions."""
         try:
-            # Try fast path first
-            fast_result = self.fast_route_query(query)
-            if fast_result:
-                fast_time = time.time() - start_time
-                logger.info(f"Fast path routing successful in {fast_time:.3f}s: {fast_result}")
-                fast_result["routing_time"] = fast_time
-                return fast_result
+            logger.info("Using LLM routing for complex query")
+            start_time = time.time()
             
-            # Fallback to LLM routing
-            logger.info("Fast path uncertain, falling back to LLM routing")
-            llm_start = time.time()
+            routing_response = self.routing_agent(f"Route this query: {query}")
             
-            response = str(self.routing_agent(f"Route: {query}"))
+            routing_time = time.time() - start_time
+            logger.info(f"LLM routing completed in {routing_time:.2f}s")
             
             # Extract JSON from LLM response
-            start = response.find('{')
-            end = response.rfind('}') + 1
+            if isinstance(routing_response, dict):
+                response_text = routing_response.get('response', str(routing_response))
+            else:
+                response_text = str(routing_response)
             
-            if start != -1 and end > start:
-                result = json.loads(response[start:end])
-                if "agents" in result:
-                    # Handle legacy routing options
-                    if "both" in result["agents"]:
-                        result["agents"] = ["cost_forecast", "trusted_advisor"]
-                    elif "comprehensive" in result["agents"]:
-                        result["agents"] = ["cost_forecast", "trusted_advisor", "budget_management"]
+            # Try to parse JSON from response
+            try:
+                # Look for JSON in the response
+                json_start = response_text.find('{')
+                json_end = response_text.rfind('}') + 1
+                
+                if json_start >= 0 and json_end > json_start:
+                    json_str = response_text[json_start:json_end]
+                    routing_decision = json.loads(json_str)
                     
-                    llm_time = time.time() - llm_start
-                    total_time = time.time() - start_time
-                    result["routing_method"] = "llm"
-                    result["routing_time"] = total_time
-                    result["llm_time"] = llm_time
-                    logger.info(f"LLM routing successful in {llm_time:.3f}s (total: {total_time:.3f}s): {result}")
-                    return result
+                    # Add metadata
+                    routing_decision["routing_method"] = "llm"
+                    routing_decision["routing_time"] = routing_time
+                    
+                    # Ensure synthesis_needed is present
+                    if "synthesis_needed" not in routing_decision:
+                        routing_decision["synthesis_needed"] = len(routing_decision.get("agents", [])) > 2
+                    
+                    # Ensure confidence is present
+                    if "confidence" not in routing_decision:
+                        routing_decision["confidence"] = "medium"
+                    
+                    logger.info(f"LLM routing decision: {routing_decision}")
+                    return routing_decision
+                
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse LLM routing response: {e}")
             
-            # Final fallback - comprehensive analysis
-            fallback_time = time.time() - start_time
-            logger.warning(f"Both fast path and LLM routing failed, using comprehensive fallback after {fallback_time:.3f}s")
-            return {
-                "agents": ["cost_forecast", "trusted_advisor", "budget_management"], 
-                "reasoning": "Fallback - comprehensive analysis due to routing uncertainty",
-                "routing_method": "fallback",
-                "routing_time": fallback_time
-            }
+            # Fallback if JSON parsing fails
+            return self._fallback_routing(query)
             
         except Exception as e:
-            error_time = time.time() - start_time
-            logger.error(f"Error in routing after {error_time:.3f}s: {str(e)}")
+            logger.error(f"LLM routing error: {str(e)}")
+            return self._fallback_routing(query)
+    
+    def _fallback_routing(self, query: str) -> Dict[str, Any]:
+        """Fallback routing when LLM fails."""
+        query_lower = query.lower()
+        
+        if 'cost' in query_lower or 'spending' in query_lower:
             return {
-                "agents": ["cost_forecast", "trusted_advisor", "budget_management"], 
-                "reasoning": f"Error fallback - {str(e)}",
-                "routing_method": "error_fallback",
-                "routing_time": error_time
+                "agents": ["cost_forecast"],
+                "reasoning": "Fallback routing to cost analysis",
+                "synthesis_needed": False,
+                "confidence": "low",
+                "routing_method": "fallback"
+            }
+        elif 'optim' in query_lower or 'saving' in query_lower:
+            return {
+                "agents": ["trusted_advisor"],
+                "reasoning": "Fallback routing to optimization recommendations",
+                "synthesis_needed": False,
+                "confidence": "low",
+                "routing_method": "fallback"
+            }
+        elif 'budget' in query_lower:
+            return {
+                "agents": ["budget_management"],
+                "reasoning": "Fallback routing to budget management",
+                "synthesis_needed": False,
+                "confidence": "low",
+                "routing_method": "fallback"
+            }
+        else:
+            return {
+                "agents": ["cost_forecast", "trusted_advisor"],
+                "reasoning": "Fallback routing to comprehensive analysis",
+                "synthesis_needed": False,
+                "confidence": "low",
+                "routing_method": "fallback"
             }
     
-    def get_routing_explanation(self, query: str, decision: Dict[str, Any]) -> str:
-        """Generate routing explanation with performance metrics"""
-        agents = decision.get("agents", [])
-        reasoning = decision.get("reasoning", "")
-        routing_method = decision.get("routing_method", "unknown")
-        routing_time = decision.get("routing_time", 0)
+    def get_routing_explanation(self, query: str, routing_decision: Dict[str, Any]) -> str:
+        """Generate human-readable routing explanation."""
+        agents = routing_decision.get("agents", [])
+        reasoning = routing_decision.get("reasoning", "")
+        synthesis_needed = routing_decision.get("synthesis_needed", False)
+        routing_method = routing_decision.get("routing_method", "unknown")
         
-        # Format agent names
+        explanation = f"**Query Analysis**: {reasoning}\n\n"
+        
         if len(agents) == 1:
-            agent_name = agents[0].replace("_", " ").title()
-            route_desc = f"Routing to {agent_name} Agent"
+            agent_name = agents[0].replace('_', ' ').title()
+            explanation += f"**Routing Decision**: Directed to {agent_name} for focused analysis.\n\n"
+            explanation += f"**Processing Mode**: Fast path - direct routing for optimal response time.\n\n"
         else:
-            agent_names = [agent.replace("_", " ").title() for agent in agents]
-            if len(agent_names) == 2:
-                route_desc = f"Routing to {agent_names[0]} and {agent_names[1]} Agents"
+            agent_names = [agent.replace('_', ' ').title() for agent in agents]
+            explanation += f"**Routing Decision**: Multi-agent analysis involving {', '.join(agent_names)}.\n\n"
+            
+            if synthesis_needed:
+                explanation += f"**Processing Mode**: Intelligent synthesis - combining insights for strategic recommendations.\n\n"
             else:
-                route_desc = f"Routing to {', '.join(agent_names[:-1])}, and {agent_names[-1]} Agents"
+                explanation += f"**Processing Mode**: Parallel aggregation - fast combination of specialized analyses.\n\n"
         
-        # Add performance indicator
-        if routing_method == "fast_path":
-            performance_indicator = f"⚡ Fast Path ({routing_time:.3f}s)"
-        elif routing_method == "llm":
-            performance_indicator = f"🧠 LLM Routing ({routing_time:.3f}s)"
-        else:
-            performance_indicator = f"🔄 {routing_method.replace('_', ' ').title()} ({routing_time:.3f}s)"
+        explanation += f"*Routing method: {routing_method}*"
         
-        return f"🎯 {route_desc} - {reasoning} | {performance_indicator}"
+        return explanation

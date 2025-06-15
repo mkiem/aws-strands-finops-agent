@@ -356,6 +356,7 @@ curl -X POST \
   - **CloudFormation Stack**: budget-management-agent
   - **Runtime**: Python 3.11 with Strands SDK (15.3 MiB package)
   - **Framework**: Strands Agent with Claude 3.5 Haiku
+  - **LLM Model**: anthropic.claude-3-5-haiku-20241022-v1:0 (Amazon Bedrock)
   - **Memory**: 512MB, Timeout: 300 seconds (5 minutes)
   - **Capabilities**: 
     - Budget performance analysis and recommendations  
@@ -368,4 +369,4 @@ curl -X POST \
     - budget-management-lambda-role (Lambda execution)
     - budget-management-action-execution-role (Budget actions)
   - **CloudWatch Logs**: /aws/lambda/budget-management-agent
-  - **Last Updated**: 2025-06-12 ✅ **REVERTED** - Removed create/modify budget functionality, back to analysis and recommendations only
+  - **Last Updated**: 2025-06-15 ✅ **LLM CONFIGURED** - Added explicit Claude 3.5 Haiku configuration for consistency

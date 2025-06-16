@@ -11,7 +11,9 @@ RUN pip install -r requirements.txt
 COPY lambda_handler.py ${LAMBDA_TASK_ROOT}
 COPY llm_router_simple.py ${LAMBDA_TASK_ROOT}
 COPY intelligent_finops_supervisor.py ${LAMBDA_TASK_ROOT}
+COPY strands_supervisor_agent.py ${LAMBDA_TASK_ROOT}
+COPY finops_agent_tools.py ${LAMBDA_TASK_ROOT}
 COPY __init__.py ${LAMBDA_TASK_ROOT}
 
 # Set the CMD to your handler
-CMD [ "lambda_handler.handler" ]
+CMD [ "lambda_handler.lambda_handler" ]

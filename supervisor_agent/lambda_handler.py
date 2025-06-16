@@ -13,6 +13,7 @@ import time
 from typing import Dict, Any, Optional, List, Callable, Tuple
 from llm_router_simple import EnhancedLLMQueryRouter
 from intelligent_finops_supervisor import IntelligentFinOpsSupervisor
+from strands_supervisor_agent import get_strands_supervisor
 
 # Configure logging
 logger = logging.getLogger()
@@ -664,3 +665,157 @@ def handler(event, context):
             "message": str(e),
             "agent": "AWS-FinOps-Supervisor-Enhanced"
         })
+
+def lambda_handler(event, context):
+    """
+    Enhanced Lambda handler with Strands-based intelligent synthesis.
+    """
+    try:
+        # Extract query from various event formats
+        query = extract_query(event)
+        if not query:
+            return format_response(400, {
+                "error": "Invalid input",
+                "message": "Please provide a query about AWS costs or optimization opportunities.",
+                "agent": "AWS-FinOps-Supervisor"
+            })
+        
+        logger.info(f"Processing query: {query}")
+        
+        # Check if we should use Strands-based approach (new architecture)
+        use_strands = os.environ.get('USE_STRANDS_AGENT', 'true').lower() == 'true'
+        
+        if use_strands:
+            # NEW: Use Strands-based supervisor with proper "Agents as Tools" pattern
+            return handle_strands_based_query(query, event, context)
+        else:
+            # LEGACY: Use existing manual routing approach
+            return handle_legacy_query(query, event, context)
+            
+    except Exception as e:
+        logger.error(f"Unexpected error in lambda_handler: {str(e)}")
+        return format_response(500, {
+            "error": "Internal server error",
+            "message": str(e),
+            "agent": "AWS-FinOps-Supervisor-Enhanced"
+        })
+
+def handle_strands_based_query(query: str, event: Dict[str, Any], context) -> Dict[str, Any]:
+    """
+    Handle query using Strands-based supervisor with intelligent agent tool selection.
+    """
+    try:
+        logger.info("Using Strands-based supervisor agent")
+        
+        # Get the Strands supervisor instance
+        supervisor = get_strands_supervisor()
+        
+        # Check if this is a WebSocket request for streaming
+        connection_id = event.get('requestContext', {}).get('connectionId')
+        
+        if connection_id:
+            # Handle WebSocket streaming
+            return handle_strands_streaming(supervisor, query, connection_id)
+        else:
+            # Handle direct invocation
+            return handle_strands_direct(supervisor, query)
+            
+    except Exception as e:
+        logger.error(f"Error in Strands-based query handling: {str(e)}")
+        return format_response(500, {
+            "error": "Error in Strands analysis",
+            "message": str(e),
+            "agent": "AWS-FinOps-Supervisor-Strands"
+        })
+
+def handle_strands_direct(supervisor, query: str) -> Dict[str, Any]:
+    """Handle direct Strands-based analysis without streaming."""
+    try:
+        start_time = time.time()
+        
+        # Let the Strands agent handle tool selection and synthesis
+        response = supervisor.analyze(query)
+        
+        processing_time = time.time() - start_time
+        
+        result = {
+            "query": query,
+            "response": response,
+            "agent": "AWS-FinOps-Supervisor-Strands",
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime()),
+            "processing_time": f"{processing_time:.1f}s",
+            "architecture": "strands_agents_as_tools"
+        }
+        
+        return format_response(200, result)
+        
+    except Exception as e:
+        logger.error(f"Error in direct Strands analysis: {str(e)}")
+        raise
+
+def handle_strands_streaming(supervisor, query: str, connection_id: str) -> Dict[str, Any]:
+    """Handle WebSocket streaming with Strands-based analysis."""
+    try:
+        logger.info(f"Starting Strands streaming analysis for connection: {connection_id}")
+        
+        # Send initial acknowledgment
+        send_websocket_message(connection_id, {
+            'type': 'analysis_started',
+            'query': query,
+            'architecture': 'strands_agents_as_tools',
+            'message': 'Starting intelligent FinOps analysis with Strands agent...'
+        })
+        
+        # Stream the analysis
+        response_parts = []
+        for event in supervisor.stream_analyze(query):
+            # Handle different event types from Strands streaming
+            if hasattr(event, 'data') and event.data:
+                # Text generation event
+                response_parts.append(event.data)
+                send_websocket_message(connection_id, {
+                    'type': 'text_chunk',
+                    'data': event.data
+                })
+            elif hasattr(event, 'tool_name'):
+                # Tool invocation event
+                send_websocket_message(connection_id, {
+                    'type': 'tool_invocation',
+                    'tool_name': event.tool_name,
+                    'message': f'Consulting {event.tool_name}...'
+                })
+        
+        # Send completion message
+        final_response = ''.join(response_parts)
+        send_websocket_message(connection_id, {
+            'type': 'analysis_complete',
+            'response': final_response,
+            'architecture': 'strands_agents_as_tools'
+        })
+        
+        return {"statusCode": 200}
+        
+    except Exception as e:
+        logger.error(f"Error in Strands streaming: {str(e)}")
+        send_websocket_message(connection_id, {
+            'type': 'analysis_error',
+            'error': str(e)
+        })
+        return {"statusCode": 500}
+
+def handle_legacy_query(query: str, event: Dict[str, Any], context) -> Dict[str, Any]:
+    """Handle query using legacy manual routing approach."""
+    # Use the existing enhanced supervisor agent
+    connection_id = event.get('requestContext', {}).get('connectionId')
+    supervisor_agent = get_enhanced_supervisor_agent()
+    response, routing_metrics = supervisor_agent(query, connection_id)
+    
+    result = {
+        "query": query,
+        "response": response,
+        "agent": "AWS-FinOps-Supervisor-Enhanced",
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime()),
+        "routing_metrics": routing_metrics
+    }
+    
+    return format_response(200, result)

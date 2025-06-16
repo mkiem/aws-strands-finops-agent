@@ -98,16 +98,21 @@ Respond with JSON only: {
             ('which', 'save', 'most'), ('which', 'biggest', 'impact'),
             ('which', 'highest', 'priority'), ('which', 'most', 'important'),
             ('what', 'best', 'strategy'), ('how', 'prioritize'),
-            ('compare', 'recommend'), ('most', 'cost', 'effective')
+            ('compare', 'recommend'), ('most', 'cost', 'effective'),
+            ('top', 'optimization'), ('top', 'cost'), ('top', 'savings'),
+            ('how much', 'save'), ('how much', 'could', 'save'),
+            ('prioritize', 'recommendations'), ('rank', 'recommendations'),
+            ('best', 'optimization'), ('most', 'effective')
         ]
         
         # Check for strategic patterns that need multiple agents
         for pattern_tuple in strategic_synthesis_patterns:
             if all(word in query_lower for word in pattern_tuple):
-                # These queries need both cost context and optimization data
+                # Strategic queries about optimization need all three agents for complete context
+                logger.info(f"STRATEGIC PATTERN MATCHED: {pattern_tuple} in query: {query}")
                 return {
-                    "agents": ["cost_forecast", "trusted_advisor"],
-                    "reasoning": "Fast route: Strategic analysis requiring cost context and optimization data",
+                    "agents": ["cost_forecast", "trusted_advisor", "budget_management"],
+                    "reasoning": f"Fast route: Strategic optimization analysis requiring cost context, optimization data, and budget planning. Matched pattern: {pattern_tuple}",
                     "synthesis_needed": True,
                     "confidence": "high",
                     "routing_method": "fast_path_strategic"
@@ -148,6 +153,7 @@ Respond with JSON only: {
                 )
                 
                 if not has_other_agent_terms and not has_strategic_language:
+                    logger.info(f"SINGLE AGENT ROUTING: {agent} for query: {query}")
                     return {
                         "agents": [agent],
                         "reasoning": f"Fast route: Single {agent.replace('_', ' ')} query",
@@ -155,6 +161,8 @@ Respond with JSON only: {
                         "confidence": "high",
                         "routing_method": "fast_path_single"
                     }
+                else:
+                    logger.info(f"SKIPPING SINGLE AGENT {agent}: has_other_agent_terms={has_other_agent_terms}, has_strategic_language={has_strategic_language}")
         
         # Multi-agent detection patterns
         cost_terms = ['cost', 'spending', 'forecast', 'trend']

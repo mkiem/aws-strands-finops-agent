@@ -264,8 +264,17 @@ class WebSocketClient {
   startHeartbeat() {
     this.stopHeartbeat(); // Clear any existing heartbeat
     
+    // Only start heartbeat if we don't already have one running
+    if (this.heartbeatInterval) {
+      console.warn('Heartbeat already running, not starting another');
+      return;
+    }
+    
+    console.log('Starting WebSocket heartbeat (30 second interval)');
+    
     this.heartbeatInterval = setInterval(() => {
       if (this.isConnected()) {
+        console.log('Sending heartbeat ping');
         this.sendMessage({ action: 'ping', timestamp: Date.now() });
         
         // Set timeout to detect if pong is not received
@@ -273,11 +282,15 @@ class WebSocketClient {
           console.warn('Heartbeat timeout - connection may be stale');
           // Don't close connection here, let natural timeout handle it
         }, 5000); // 5 second timeout for pong response
+      } else {
+        console.log('WebSocket not connected, stopping heartbeat');
+        this.stopHeartbeat();
       }
     }, 30000); // Send ping every 30 seconds
   }
 
   stopHeartbeat() {
+    console.log('Stopping WebSocket heartbeat');
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;

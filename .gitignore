@@ -99,6 +99,7 @@ setup_command_logging.sh
 memory-*.json
 *-memory.json
 finopsDirHistory.json
+finops-project.json
 
 # Response and test artifacts
 response*.json

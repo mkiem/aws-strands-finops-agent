@@ -2,6 +2,14 @@
 
 This is the README file for the **FinOps Agent** project, as part of the "2025 Quack the Code Challenge", an internal contest for building applications using Q CLI. The FinOps Agent is a comprehensive AWS cost optimization and financial operations platform built with Strands SDK, featuring intelligent agent orchestration, real-time WebSocket communication, and integrated MCP server support for enhanced automation capabilities.
 
+My customer's Head of FinOps wanted a streamlined chat interface for self-service of different product teams where they can learn about their own cost and get recommendations for cost optimizations. Right now, this reporting is all done manually by a centralized FinOps team. Our account team submitted this use case to the PACE team, which is going through review for implementation support for my customer. As this review is going on, I thought why not try to build it myself using the QUACK challenge as the medium. In addition to achieving these capabilities, I also wanted to explore the use of MCP servers as tools for Agents and our newly released Strands framework, which meet my customer needs by offering an open source agentic/llm agnostic approach that is not limited by the constraints of Amazon Bedrock. The result of this endeavor is astounding. I am honestly surprised by what I was able to accomplish over two weeks a couple of hours a day as a single person. 
+
+These were some game changing approaches I applied to Q CLI development:
+1. Adding all needed documentation to project directly (e.g. Strands), which is not available in the pretraining data
+2. Adding the AWS documentation MCP server (for AWS best practices) and Puppetter MCP server (for front-end testing)
+3. Making use of Q Cli per-prompt hooks base on my project-rules.md file to steet consistency, updating the project rules to correct the LLM's common mistakes
+4. Breaking down the development into microservices to overcome the LLM's context limitations
+
 ## Use case
 
 The FinOps Agent addresses the critical challenge of AWS cost management and optimization for enterprises. As organizations scale their cloud infrastructure, managing costs becomes increasingly complex, requiring specialized knowledge of AWS services, pricing models, and optimization strategies. Our solution provides an intelligent, AI-powered platform that automates cost analysis, delivers actionable optimization recommendations, and enables proactive financial operations management.
@@ -30,7 +38,7 @@ The FinOps Agent delivers exceptional value through its innovative architecture 
 **⚡ Operational Excellence**
 - **Intelligent Agent Orchestration**: Supervisor agent routes queries to specialized agents for optimal responses
 - **Real-time Communication**: WebSocket-based architecture eliminates timeout limitations for complex analysis
-- **Provisioned Concurrency**: Sub-second response times with eliminated cold starts
+- **Provisioned Concurrency**: Eliminated Lambda cold starts
 
 **🔧 Technical Innovation**
 - **Strands SDK Framework**: Built on cutting-edge agent framework for reliable, scalable AI interactions
@@ -92,11 +100,6 @@ The FinOps Agent project follows a microservices architecture with self-containe
 * `generated-diagrams/`: System architecture diagrams and visual documentation
 * `agent_to_agent_communication_architecture.md`: Inter-agent communication patterns
 * `PROVISIONED_CONCURRENCY_IMPLEMENTATION.md`: Performance optimization documentation
-
-### **Development Tools**
-* `archive/`: Historical deployment packages and outdated files
-* `.git/`: Git repository with complete development history
-* Various CloudFormation templates and deployment scripts within each component directory
 
 ### **Quack Challenge Specific Files**
 * `requirements.md`: ✅ **COMPLETED** - Comprehensive requirements analysis and stakeholder needs

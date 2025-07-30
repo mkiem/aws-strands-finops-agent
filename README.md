@@ -1,4 +1,4 @@
-# FinOps Agent
+# FinOps Agent built on AWS using StrandsAgent SDK
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub issues](https://img.shields.io/github/issues/mkiem/finops-agent)](https://github.com/mkiem/finops-agent/issues)

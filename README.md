@@ -1,8 +1,8 @@
 # FinOps Agent
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![GitHub issues](https://img.shields.io/github/issues/finopsagent/finopsagent)](https://github.com/finopsagent/finopsagent/issues)
-[![GitHub stars](https://img.shields.io/github/stars/finopsagent/finopsagent)](https://github.com/finopsagent/finopsagent/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/mkiem/finops-agent)](https://github.com/mkiem/finops-agent/issues)
+[![GitHub stars](https://img.shields.io/github/stars/mkiem/finops-agent)](https://github.com/mkiem/finops-agent/stargazers)
 
 A comprehensive AWS cost optimization and financial operations platform built with intelligent agent orchestration, real-time communication, and advanced automation capabilities.
 
@@ -66,8 +66,8 @@ Our solution provides an intelligent, multi-agent system that automates cost ana
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/finopsagent/finopsagent.git
-   cd finopsagent
+   git clone https://github.com/mkiem/finops-agent.git
+   cd finops-agent
    ```
 
 2. **Set up environment**
@@ -159,8 +159,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 **Support**
 
 - **Documentation**: Check our [docs](docs/) for detailed information
-- **Issues**: Report bugs or request features via [GitHub Issues](https://github.com/finopsagent/finopsagent/issues)
-- **Discussions**: Join our [GitHub Discussions](https://github.com/finopsagent/finopsagent/discussions)
+- **Issues**: Report bugs or request features via [GitHub Issues](https://github.com/mkiem/finops-agent/issues)
+- **Discussions**: Join our [GitHub Discussions](https://github.com/mkiem/finops-agent/discussions)
 - **Security**: Report security issues via our [Security Policy](SECURITY.md)
 
 ## 🌟 **Star History**

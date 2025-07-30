@@ -155,6 +155,8 @@ OPEN_SOURCE_PROGRESS.md
 OPEN_SOURCE_PUBLICATION_PLAN.md
 *cleanup*
 *CLEANUP*
+*IAC_REVIEW_SUMMARY.md
+*REVIEW_SUMMARY.md
 
 # Backup and temporary files
 *.bak
@@ -166,6 +168,8 @@ OPEN_SOURCE_PUBLICATION_PLAN.md
 # UI development artifacts
 /finops-ui/*.zip
 finops-ui-*.zip
+finops-ui-cost-fix*.zip
+finops-ui-no-cost-summary.zip
 
 # Development and testing
 .pytest_cache/
@@ -174,6 +178,9 @@ htmlcov/
 .tox/
 .cache/
 cache/
+*test*.json
+*memory*.json
+test_streaming.json
 
 # Docker
 .dockerignore
@@ -182,3 +189,17 @@ docker-compose.override.yml
 # Local configuration overrides
 config.local.json
 settings.local.json
+
+# Internal notes and documentation
+*notes*
+*NOTES*
+*internal*
+*INTERNAL*
+*progress*
+*PROGRESS*
+*plan*
+*PLAN*
+
+# Build artifacts and packages
+websocket_api/build/
+*/build/*.zip

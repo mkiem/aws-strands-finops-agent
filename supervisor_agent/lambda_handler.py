@@ -54,7 +54,7 @@ def format_response(status_code: int, body: Dict[str, Any]) -> Dict[str, Any]:
         "statusCode": status_code,
         "headers": {
             "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "https://staging.da7jmqelobr5a.amplifyapp.com",
+            "Access-Control-Allow-Origin": "https://staging.${AMPLIFY_APP_ID}.amplifyapp.com",
             "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Amz-Date,X-Amz-Security-Token,X-Amz-Content-Sha256",
             "Access-Control-Allow-Methods": "POST,OPTIONS",
             "Access-Control-Max-Age": "300"
@@ -67,7 +67,7 @@ def format_options_response() -> Dict[str, Any]:
     return {
         "statusCode": 200,
         "headers": {
-            "Access-Control-Allow-Origin": "https://staging.da7jmqelobr5a.amplifyapp.com",
+            "Access-Control-Allow-Origin": "https://staging.${AMPLIFY_APP_ID}.amplifyapp.com",
             "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Amz-Date,X-Amz-Security-Token,X-Amz-Content-Sha256",
             "Access-Control-Allow-Methods": "POST,OPTIONS",
             "Access-Control-Max-Age": "300"
@@ -95,13 +95,15 @@ def extract_query(event: dict) -> Optional[str]:
     
     return None
 
-def should_proceed_with_synthesis(responses: Dict[str, Any], min_success_ratio: float = 0.67) -> Tuple[bool, Dict[str, Any], List[str]]:
+def should_proceed_with_synthesis(responses: Dict[str, Any], min_success_ratio: float = 0.5) -> Tuple[bool, Dict[str, Any], List[str]]:
     """
     Determine if we have enough successful responses to proceed with synthesis.
     
+    IMPROVED: More lenient error handling - proceed with even 1 successful agent
+    
     Args:
         responses: Agent responses (including errors)
-        min_success_ratio: Minimum ratio of successful agents (default: 67%)
+        min_success_ratio: Minimum ratio of successful agents (default: 50%)
     
     Returns:
         (should_proceed, successful_responses_only, failed_agents)
@@ -118,10 +120,13 @@ def should_proceed_with_synthesis(responses: Dict[str, Any], min_success_ratio: 
             logger.info(f"Agent {agent} succeeded")
     
     success_ratio = len(successful_responses) / len(responses) if responses else 0
-    should_proceed = success_ratio >= min_success_ratio
+    
+    # IMPROVED: Always proceed if we have at least 1 successful response
+    should_proceed = len(successful_responses) >= 1
     
     logger.info(f"Success analysis: {len(successful_responses)}/{len(responses)} agents succeeded "
-               f"({success_ratio:.1%}). Threshold: {min_success_ratio:.1%}. Proceed: {should_proceed}")
+               f"({success_ratio:.1%}). Min threshold: {min_success_ratio:.1%}. "
+               f"Proceed: {should_proceed} (improved: always proceed with ≥1 success)")
     
     return should_proceed, successful_responses, failed_agents
 
@@ -277,14 +282,20 @@ def get_enhanced_supervisor_agent():
                     agent_tasks[agent_name] = executor.submit(agent_functions[agent_name], query)
                     logger.info(f"Submitted {agent_name} agent task")
             
-            # Collect results from parallel execution
+            # Collect results from parallel execution with optimized timeouts
             for agent_name, future in agent_tasks.items():
                 try:
-                    responses[agent_name] = future.result(timeout=30)  # 30 second timeout per agent
-                    logger.info(f"Completed {agent_name} agent invocation")
+                    # Use different timeouts based on agent type
+                    if agent_name in ['cost_forecast', 'aws-cost-forecast-agent']:
+                        timeout = 180  # 3 minutes for cost forecast agent
+                    else:
+                        timeout = 60   # 1 minute for other agents
+                    
+                    responses[agent_name] = future.result(timeout=timeout)
+                    logger.info(f"Completed {agent_name} agent invocation in {timeout}s timeout")
                 except concurrent.futures.TimeoutError:
-                    logger.error(f"Timeout waiting for {agent_name} agent")
-                    responses[agent_name] = {"error": f"{agent_name} agent timeout after 30 seconds"}
+                    logger.error(f"Timeout waiting for {agent_name} agent after {timeout} seconds")
+                    responses[agent_name] = {"error": f"{agent_name} agent timeout after {timeout} seconds"}
                 except Exception as e:
                     logger.error(f"Error getting result from {agent_name} agent: {str(e)}")
                     responses[agent_name] = {"error": f"{agent_name} agent error: {str(e)}"}
@@ -315,10 +326,14 @@ def get_enhanced_supervisor_agent():
                     agent_tasks[agent_name] = executor.submit(agent_functions[agent_name], query)
                     logger.info(f"Submitted {agent_name} agent task")
             
-            # Stream results as they complete with proper timeout handling
+            # Stream results as they complete with optimized timeout handling
             try:
-                # Use a longer timeout (5 minutes) to handle complex queries
-                for future in concurrent.futures.as_completed(agent_tasks.values(), timeout=300):
+                # Use different timeouts based on agent composition
+                max_timeout = 300  # 5 minutes overall maximum
+                if 'cost_forecast' in agents_to_invoke or 'aws-cost-forecast-agent' in agents_to_invoke:
+                    max_timeout = 240  # 4 minutes if cost forecast is involved
+                
+                for future in concurrent.futures.as_completed(agent_tasks.values(), timeout=max_timeout):
                     # Find which agent completed
                     completed_agent = None
                     for agent_name, agent_future in agent_tasks.items():
@@ -328,8 +343,7 @@ def get_enhanced_supervisor_agent():
                     
                     if completed_agent:
                         try:
-                            # FIXED: Remove timeout for result extraction since the future is already completed
-                            # The agent has already finished, so result() should return immediately
+                            # Extract result (should be immediate since future is completed)
                             result = future.result()
                             responses[completed_agent] = result
                             completed_agents.append(completed_agent)
@@ -355,14 +369,14 @@ def get_enhanced_supervisor_agent():
                             responses[completed_agent] = {"error": f"{completed_agent} agent error: {str(e)}"}
                             
             except concurrent.futures.TimeoutError:
-                # Handle overall timeout - some agents didn't complete in 5 minutes
-                logger.error(f"Overall timeout waiting for agents. Completed: {len(completed_agents)}/{len(agents_to_invoke)}")
+                # Handle overall timeout - some agents didn't complete
+                logger.error(f"Overall timeout waiting for agents after {max_timeout}s. Completed: {len(completed_agents)}/{len(agents_to_invoke)}")
                 
                 # Mark remaining agents as timed out
                 for agent_name, future in agent_tasks.items():
                     if agent_name not in responses:
-                        logger.error(f"Agent {agent_name} did not complete within timeout")
-                        responses[agent_name] = {"error": f"{agent_name} agent timeout after 5 minutes"}
+                        logger.error(f"Agent {agent_name} did not complete within {max_timeout}s timeout")
+                        responses[agent_name] = {"error": f"{agent_name} agent timeout after {max_timeout} seconds"}
                         
                         # Cancel the future to clean up
                         future.cancel()
@@ -378,11 +392,6 @@ def get_enhanced_supervisor_agent():
                     })
         
         logger.info(f"Streaming processing completed. Received {len(responses)} responses.")
-        return responses
-                    except Exception as e:
-                        logger.error(f"Error getting result from {completed_agent} agent: {str(e)}")
-                        responses[completed_agent] = {"error": f"{completed_agent} agent error: {str(e)}"}
-        
         return responses
     
     def enhanced_supervisor_agent(query: str, connection_id: str = None):
@@ -434,11 +443,13 @@ def get_enhanced_supervisor_agent():
             
             else:
                 # MULTI-AGENT PATH: Check if synthesis is needed
+                logger.info(f"Multi-agent path: {len(agents_to_invoke)} agents - {agents_to_invoke}")
                 needs_synthesis = supervisor.should_synthesize(query, agents_to_invoke)
+                logger.info(f"Synthesis decision: {needs_synthesis} for query: '{query[:100]}...'")
                 
                 if needs_synthesis:
                     # SYNTHESIS PATH: Intelligent LLM-based synthesis
-                    logger.info(f"Synthesis path: {len(agents_to_invoke)} agents with intelligent synthesis")
+                    logger.info(f"SYNTHESIS PATH: {len(agents_to_invoke)} agents with intelligent synthesis")
                     
                     # Generate job ID for streaming
                     job_id = str(uuid.uuid4()) if connection_id else None
@@ -526,35 +537,62 @@ def get_enhanced_supervisor_agent():
                     return final_response, routing_decision
                 
                 else:
-                    # AGGREGATION PATH: Simple template-based combination with graceful degradation
-                    logger.info(f"Aggregation path: {len(agents_to_invoke)} agents with simple aggregation")
+                    # AGGREGATION PATH: Enhanced aggregation with optional synthesis
+                    logger.info(f"AGGREGATION PATH: {len(agents_to_invoke)} agents with enhanced aggregation")
                     
                     # Execute agents in parallel
                     responses = execute_agents_parallel(agents_to_invoke, query)
                     
-                    # PHASE 1 FIX: Apply graceful degradation to aggregation path too
-                    should_proceed, successful_responses, failed_agents = should_proceed_with_synthesis(responses, min_success_ratio=0.5)  # Lower threshold for aggregation
+                    # IMPROVED: Always proceed if we have at least 1 successful response
+                    should_proceed, successful_responses, failed_agents = should_proceed_with_synthesis(responses, min_success_ratio=0.5)
                     
                     if should_proceed:
-                        # Use simple aggregation with successful responses only
-                        if failed_agents:
-                            # Partial success
-                            aggregation_result = build_simple_aggregation(routing_explanation, successful_responses)
-                            final_response = format_partial_success_response(
-                                successful_responses, failed_agents, aggregation_result, query
-                            )
-                            logger.info(f"Partial aggregation completed: {len(successful_responses)} successful, {len(failed_agents)} failed")
+                        # IMPROVED: Use synthesis even in aggregation path for better results
+                        if len(successful_responses) >= 2:
+                            # Multiple successful responses - use synthesis for better integration
+                            logger.info(f"Using synthesis for {len(successful_responses)} successful responses in aggregation path")
+                            
+                            synthesis_routing_context = routing_context.copy()
+                            synthesis_routing_context['successful_agents'] = list(successful_responses.keys())
+                            synthesis_routing_context['failed_agents'] = failed_agents
+                            
+                            synthesis_start = time.time()
+                            synthesis_result = supervisor.synthesize_responses(query, successful_responses, synthesis_routing_context)
+                            synthesis_time = time.time() - synthesis_start
+                            
+                            if failed_agents:
+                                # Partial success with synthesis
+                                final_response = format_partial_success_response(
+                                    successful_responses, failed_agents, synthesis_result, query
+                                )
+                                logger.info(f"Partial synthesis in aggregation path: {len(successful_responses)} successful, {len(failed_agents)} failed")
+                            else:
+                                # Complete success with synthesis
+                                final_response = synthesis_result
+                                logger.info(f"Complete synthesis in aggregation path: all {len(successful_responses)} agents successful")
                         else:
-                            # Complete success
-                            final_response = build_simple_aggregation(routing_explanation, successful_responses)
-                            logger.info(f"Complete aggregation completed: all {len(successful_responses)} agents successful")
+                            # Single successful response - use simple formatting
+                            logger.info(f"Single successful response in aggregation path")
+                            agent_name = list(successful_responses.keys())[0]
+                            response = successful_responses[agent_name]
+                            
+                            if failed_agents:
+                                # Single success with failures
+                                final_response = format_partial_success_response(
+                                    successful_responses, failed_agents, 
+                                    supervisor.format_single_agent_response(agent_name, response, routing_explanation), 
+                                    query
+                                )
+                            else:
+                                # Single success, no failures
+                                final_response = supervisor.format_single_agent_response(agent_name, response, routing_explanation)
                     else:
-                        # Insufficient successful responses
-                        logger.warning(f"Insufficient successful responses for aggregation: {len(successful_responses)}/{len(responses)}")
+                        # No successful responses
+                        logger.error(f"No successful responses in aggregation path")
                         final_response = format_insufficient_success_response(successful_responses, failed_agents, query)
                     
                     processing_time = time.time() - start_time
-                    logger.info(f"Aggregation processing completed in {processing_time:.2f}s")
+                    logger.info(f"Enhanced aggregation processing completed in {processing_time:.2f}s")
                     
                     return final_response, routing_decision
             

@@ -186,7 +186,7 @@ def send_message_to_connection(connection_id, message):
         apigateway_management = boto3.client(
             'apigatewaymanagementapi',
             endpoint_url=os.environ.get('WEBSOCKET_ENDPOINT', 
-                                      'https://rtswivmeqj.execute-api.us-east-1.amazonaws.com/prod')
+                                      '${API_GATEWAY_ENDPOINT}')
         )
         
         apigateway_management.post_to_connection(

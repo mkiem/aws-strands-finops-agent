@@ -18,32 +18,47 @@ class EnhancedLLMQueryRouter:
 Analyze the user's query and route to appropriate agents based on intent and content, while also determining if intelligent synthesis is needed.
 
 Available agents:
-- cost_forecast: For queries about AWS costs, spending analysis, cost trends, forecasting, and historical cost data
-- trusted_advisor: For queries about cost optimization, savings opportunities, efficiency improvements, and resource recommendations  
+- cost_forecast: ONLY for queries about AWS costs, spending analysis, cost trends, forecasting, and historical cost data. NEVER for optimization.
+- trusted_advisor: ONLY for queries about cost optimization, savings opportunities, efficiency improvements, resource recommendations, and how to reduce costs
 - budget_management: For queries about budgets, budget creation, budget recommendations, cost controls, spending limits, budget governance, and proactive cost management
+
+CRITICAL ROUTING RULES:
+- Cost Analysis vs Optimization: These are SEPARATE domains
+  * cost_forecast = "What are my costs?" "Show spending trends" "Forecast my costs"
+  * trusted_advisor = "How can I save money?" "Optimize my costs" "Reduce spending" "Cost recommendations"
+- NEVER route cost optimization questions to cost_forecast
+- NEVER route pure cost analysis to trusted_advisor
 
 Routing Guidelines:
 - Single agent: Route to the most relevant agent when query has clear focus
 - Multiple agents: Use when query explicitly asks for comprehensive analysis or spans multiple domains
 - Budget focus: Route to budget_management for budget-related governance and control questions
-- Cost analysis: Route to cost_forecast for spending analysis and trends
-- Optimization: Route to trusted_advisor for savings and efficiency
+- Cost analysis ONLY: Route to cost_forecast for spending analysis and trends (NO optimization)
+- Optimization ONLY: Route to trusted_advisor for savings and efficiency recommendations
+- Mixed queries: Use multiple agents when both cost analysis AND optimization are requested
 
 Synthesis Guidelines:
 - synthesis_needed = false: Simple queries that just need information aggregation
 - synthesis_needed = true: Strategic queries requiring analysis, prioritization, or cross-domain insights
 
-Examples of synthesis_needed = true:
-- "Which optimization recommendations would have the biggest impact on my cost trends?"
-- "How should I prioritize these recommendations?"
-- "What's the best strategy for balancing costs and optimization?"
-- "Create a roadmap for cost optimization"
-- "Compare and recommend the most important actions"
+Examples of CORRECT routing:
 
-Examples of synthesis_needed = false:
-- "Show me my costs and optimization recommendations"
-- "What are my costs? Also show me optimization opportunities"
-- "Display cost analysis and trusted advisor recommendations"
+COST ANALYSIS ONLY (cost_forecast):
+- "What are my current AWS costs?"
+- "Show me my spending trends for the last 6 months"
+- "Forecast my costs for next quarter"
+- "What did I spend on EC2 last month?"
+
+OPTIMIZATION ONLY (trusted_advisor):
+- "How can I reduce my AWS costs?"
+- "Show me cost optimization recommendations"
+- "What are my savings opportunities?"
+- "How can I optimize my spending?"
+
+BOTH (cost_forecast + trusted_advisor):
+- "Show me my costs and how to optimize them"
+- "What are my spending trends and savings opportunities?"
+- "Analyze my costs and provide optimization recommendations"
 
 Respond with JSON only: {
     "agents": ["agent_name"], 
@@ -80,14 +95,15 @@ Respond with JSON only: {
         comprehensive_patterns = [
             'comprehensive finops', 'complete finops', 'full finops',
             'comprehensive analysis', 'complete analysis', 'full analysis',
-            'comprehensive aws', 'complete aws financial',
-            'all recommendations', 'everything', 'full review'
+            'comprehensive aws', 'complete aws financial', 'complete financial analysis',
+            'all recommendations', 'everything', 'full review',
+            'complete financial analysis of my aws environment'  # Added specific pattern
         ]
         
         if any(pattern in query_lower for pattern in comprehensive_patterns):
             return {
                 "agents": ["cost_forecast", "trusted_advisor", "budget_management"],
-                "reasoning": "Fast route: Comprehensive FinOps analysis requested",
+                "reasoning": "Fast route: Comprehensive FinOps analysis requested - all 3 agents needed",
                 "synthesis_needed": True,  # Always synthesize comprehensive queries
                 "confidence": "high",
                 "routing_method": "fast_path_comprehensive"
@@ -118,21 +134,27 @@ Respond with JSON only: {
                     "routing_method": "fast_path_strategic"
                 }
         
-        # Single agent patterns (no synthesis needed)
+        # Single agent patterns (no synthesis needed) - CLEAR SEPARATION
         single_agent_patterns = {
             'cost_forecast': [
+                # PURE COST ANALYSIS ONLY - NO OPTIMIZATION TERMS
                 'what are my costs', 'show me costs', 'cost analysis', 'spending analysis',
                 'cost trends', 'cost forecast', 'how much am i spending', 'cost breakdown',
-                'what are my aws costs', 'current costs'
+                'what are my aws costs', 'current costs', 'historical costs', 'spending trends',
+                'cost data', 'spending patterns', 'monthly costs', 'cost summary'
             ],
             'trusted_advisor': [
+                # ALL OPTIMIZATION AND SAVINGS - NO PURE COST ANALYSIS
                 'optimization recommendations', 'cost optimization', 'savings opportunities',
-                'efficiency recommendations', 'reduce costs', 'optimize spending',
-                'show me optimization', 'optimization opportunities'
+                'efficiency recommendations', 'reduce costs', 'optimize spending', 'save money',
+                'show me optimization', 'optimization opportunities', 'cost savings',
+                'how to reduce', 'lower costs', 'cut costs', 'minimize spending',
+                'cost reduction', 'savings recommendations', 'optimize my costs'
             ],
             'budget_management': [
                 'budget recommendations', 'create budget', 'budget planning',
-                'spending limits', 'cost controls', 'budget governance'
+                'spending limits', 'cost controls', 'budget governance',
+                'budget analysis', 'budget performance', 'budget alerts'
             ]
         }
         
@@ -164,17 +186,24 @@ Respond with JSON only: {
                 else:
                     logger.info(f"SKIPPING SINGLE AGENT {agent}: has_other_agent_terms={has_other_agent_terms}, has_strategic_language={has_strategic_language}")
         
-        # Multi-agent detection patterns
-        cost_terms = ['cost', 'spending', 'forecast', 'trend']
-        optimization_terms = ['optim', 'saving', 'reduc', 'efficiency', 'recommend']
-        budget_terms = ['budget', 'planning', 'control', 'limit']
+        # Multi-agent detection patterns - CLEAR DOMAIN SEPARATION
+        cost_analysis_terms = ['cost', 'spending', 'forecast', 'trend', 'analysis', 'breakdown']
+        optimization_terms = ['optim', 'saving', 'reduc', 'efficiency', 'recommend', 'cut', 'lower', 'minimize']
+        budget_terms = ['budget', 'planning', 'control', 'limit', 'governance']
         
-        has_cost = any(term in query_lower for term in cost_terms)
+        # Check for pure cost analysis (no optimization intent)
+        has_cost_analysis = any(term in query_lower for term in cost_analysis_terms)
         has_optimization = any(term in query_lower for term in optimization_terms)
         has_budget = any(term in query_lower for term in budget_terms)
         
+        # CRITICAL: Separate cost analysis from optimization
+        # If query has optimization terms, it should NOT go to cost_forecast alone
+        pure_cost_analysis = has_cost_analysis and not has_optimization and not has_budget
+        pure_optimization = has_optimization and not has_cost_analysis and not has_budget
+        pure_budget = has_budget and not has_cost_analysis and not has_optimization
+        
         # Count how many domains are mentioned
-        domain_count = sum([has_cost, has_optimization, has_budget])
+        domain_count = sum([has_cost_analysis, has_optimization, has_budget])
         
         # Synthesis vs aggregation patterns (FIXED LOGIC)
         strong_synthesis_patterns = [
@@ -218,31 +247,73 @@ Respond with JSON only: {
                 "routing_method": "fast_path_comprehensive"
             }
         
-        elif has_cost and has_optimization:
+        # Route based on domain combinations with CLEAR SEPARATION
+        if domain_count >= 3:
+            # 3+ domains = comprehensive analysis
+            return {
+                "agents": ["cost_forecast", "trusted_advisor", "budget_management"],
+                "reasoning": "Fast route: Multi-domain comprehensive analysis",
+                "synthesis_needed": True,  # Always synthesize for 3+ agents
+                "confidence": "high",
+                "routing_method": "fast_path_comprehensive"
+            }
+        
+        elif has_cost_analysis and has_optimization and not has_budget:
+            # Cost analysis + optimization = both agents
             return {
                 "agents": ["cost_forecast", "trusted_advisor"],
-                "reasoning": "Fast route: Cost analysis and optimization query",
+                "reasoning": "Fast route: Cost analysis and optimization requested - separate domains",
                 "synthesis_needed": needs_synthesis,
                 "confidence": "high",
-                "routing_method": "fast_path_multi"
+                "routing_method": "fast_path_dual_cost_optimization"
             }
         
-        elif has_cost and has_budget:
+        elif has_cost_analysis and has_budget and not has_optimization:
+            # Cost analysis + budget = both agents
             return {
                 "agents": ["cost_forecast", "budget_management"],
-                "reasoning": "Fast route: Cost forecast and budget planning query",
+                "reasoning": "Fast route: Cost analysis and budget management",
                 "synthesis_needed": needs_synthesis,
                 "confidence": "high",
-                "routing_method": "fast_path_multi"
+                "routing_method": "fast_path_dual_cost_budget"
             }
         
-        elif has_optimization and has_budget:
+        elif has_optimization and has_budget and not has_cost_analysis:
+            # Optimization + budget = both agents
             return {
-                "agents": ["budget_management", "trusted_advisor"],
-                "reasoning": "Fast route: Budget optimization query",
+                "agents": ["trusted_advisor", "budget_management"],
+                "reasoning": "Fast route: Optimization and budget management",
                 "synthesis_needed": needs_synthesis,
                 "confidence": "high",
-                "routing_method": "fast_path_multi"
+                "routing_method": "fast_path_dual_optimization_budget"
+            }
+        
+        # Single domain routing with clear separation
+        elif pure_cost_analysis:
+            return {
+                "agents": ["cost_forecast"],
+                "reasoning": "Fast route: Pure cost analysis query (no optimization)",
+                "synthesis_needed": False,
+                "confidence": "high",
+                "routing_method": "fast_path_single_cost"
+            }
+        
+        elif pure_optimization:
+            return {
+                "agents": ["trusted_advisor"],
+                "reasoning": "Fast route: Pure optimization query (no cost analysis)",
+                "synthesis_needed": False,
+                "confidence": "high",
+                "routing_method": "fast_path_single_optimization"
+            }
+        
+        elif pure_budget:
+            return {
+                "agents": ["budget_management"],
+                "reasoning": "Fast route: Pure budget management query",
+                "synthesis_needed": False,
+                "confidence": "high",
+                "routing_method": "fast_path_single_budget"
             }
         
         return None  # Fall back to LLM routing

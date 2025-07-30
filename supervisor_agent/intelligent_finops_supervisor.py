@@ -50,6 +50,8 @@ Format responses in clear markdown with actionable sections."""
         """
         Determine if a query requires intelligent synthesis or simple aggregation.
         
+        UPDATED LOGIC: More aggressive synthesis for better user experience
+        
         Args:
             query: The user's query
             agents: List of agents to be invoked
@@ -63,61 +65,42 @@ Format responses in clear markdown with actionable sections."""
         if len(agents) >= 3:
             return True   # 3+ agents always need synthesis
         
-        # For 2 agents, check if synthesis adds value
+        # For 2 agents, DEFAULT TO SYNTHESIS unless explicitly simple aggregation
         return self._requires_synthesis_for_two_agents(query, agents)
     
     def _requires_synthesis_for_two_agents(self, query: str, agents: List[str]) -> bool:
-        """Determine if 2-agent response needs synthesis or simple aggregation."""
+        """
+        Determine if 2-agent response needs synthesis or simple aggregation.
+        
+        UPDATED: Default to synthesis unless explicitly simple aggregation requested.
+        """
         
         query_lower = query.lower()
         
-        # Strong synthesis indicators - strategic/comparative language
-        strong_synthesis_patterns = [
-            "which should i", "what's the best", "how do i balance",
-            "prioritize", "most important", "highest impact", "biggest savings",
-            "roadmap", "strategy", "plan", "sequence", "order", "first"
+        # ONLY these patterns should skip synthesis (simple aggregation)
+        simple_aggregation_only_patterns = [
+            "show me both", "display both", "list both", "give me both",
+            "show me the", "display the", "list the", "just show",
+            "just display", "just list", "just give me"
         ]
         
-        # Simple aggregation indicators - just want information displayed
-        strong_aggregation_patterns = [
-            "show me", "display", "list", "what are", "give me",
-            "provide", "tell me about", "information about"
-        ]
+        # Check if user explicitly wants simple aggregation
+        wants_simple_aggregation = any(pattern in query_lower for pattern in simple_aggregation_only_patterns)
         
-        # Weak synthesis indicators - could go either way
-        weak_synthesis_patterns = [
-            "compare", "recommend", "integrate", "combine", 
-            "comprehensive", "holistic", "next steps"
-        ]
+        if wants_simple_aggregation:
+            logger.info(f"Simple aggregation requested for 2 agents: {agents}")
+            return False
         
-        # Check for strong patterns first
-        has_strong_synthesis = any(pattern in query_lower for pattern in strong_synthesis_patterns)
-        has_strong_aggregation = any(pattern in query_lower for pattern in strong_aggregation_patterns)
-        has_weak_synthesis = any(pattern in query_lower for pattern in weak_synthesis_patterns)
-        
-        # Decision logic with priority
-        if has_strong_synthesis:
-            synthesis_needed = True
-        elif has_strong_aggregation and not has_weak_synthesis:
-            synthesis_needed = False  # Clear aggregation request
-        elif has_weak_synthesis and not has_strong_aggregation:
-            synthesis_needed = True   # Lean towards synthesis for strategic terms
-        else:
-            # Default based on cross-domain analysis potential
-            synthesis_needed = False
-        
-        logger.info(f"Synthesis decision for 2 agents {agents}: "
-                   f"strong_synthesis={has_strong_synthesis}, "
-                   f"strong_aggregation={has_strong_aggregation}, "
-                   f"weak_synthesis={has_weak_synthesis}, "
-                   f"synthesis_needed={synthesis_needed}")
-        
-        return synthesis_needed
+        # DEFAULT TO SYNTHESIS for better user experience
+        logger.info(f"Defaulting to synthesis for 2 agents: {agents}")
+        return True
     
     def synthesize_responses(self, query: str, agent_responses: Dict[str, Any], 
                            routing_context: Dict[str, Any]) -> str:
         """
         Intelligently synthesize responses from multiple agents.
+        
+        IMPROVED: Better error handling and fallback mechanisms
         
         Args:
             query: Original user query
@@ -132,18 +115,22 @@ Format responses in clear markdown with actionable sections."""
         try:
             synthesis_prompt = self._build_synthesis_prompt(query, agent_responses, routing_context)
             
-            # FIXED: Use the correct Strands Agent method
+            logger.info("Invoking synthesis agent with LLM...")
             synthesis_response = self.synthesis_agent(synthesis_prompt)
             
             # Extract response content
             if isinstance(synthesis_response, dict):
-                return synthesis_response.get('response', str(synthesis_response))
+                result = synthesis_response.get('response', str(synthesis_response))
             else:
-                return str(synthesis_response)
+                result = str(synthesis_response)
+            
+            logger.info(f"Synthesis completed successfully. Response length: {len(result)} characters")
+            return result
                 
         except Exception as e:
-            logger.error(f"Synthesis failed: {str(e)}")
-            # Fallback to simple aggregation if synthesis fails
+            logger.error(f"Synthesis failed with error: {str(e)}")
+            logger.info("Falling back to enhanced aggregation...")
+            # Fallback to enhanced aggregation if synthesis fails
             return self._fallback_aggregation(query, agent_responses, routing_context)
     
     def _build_synthesis_prompt(self, query: str, agent_responses: Dict[str, Any], 

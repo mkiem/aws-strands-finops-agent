@@ -9,7 +9,7 @@ Parameters:
   
   LambdaS3Bucket:
     Type: String
-    Default: finops-deployment-packages-062025
+    Default: ${DEPLOYMENT_BUCKET}
     Description: S3 bucket containing Lambda deployment package
   
   LambdaS3Key:

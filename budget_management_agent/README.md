@@ -57,7 +57,7 @@ budget_management_agent/
 ### **Prerequisites**
 - AWS CLI configured with appropriate permissions
 - Python 3.11+
-- S3 bucket for deployment packages: `finops-deployment-packages-062025`
+- S3 bucket for deployment packages: `${DEPLOYMENT_BUCKET}`
 
 ### **Build and Deploy**
 
@@ -69,7 +69,7 @@ budget_management_agent/
 
 2. **Upload to S3:**
    ```bash
-   aws s3 cp budget-management-agent.zip s3://finops-deployment-packages-062025/
+   aws s3 cp budget-management-agent.zip s3://${DEPLOYMENT_BUCKET}/
    ```
 
 3. **Deploy with CloudFormation:**
@@ -78,7 +78,7 @@ budget_management_agent/
      --template-file cloudformation/budget-management-agent.yaml \
      --parameter-overrides \
        ProjectName=budget-management \
-       LambdaS3Bucket=finops-deployment-packages-062025 \
+       LambdaS3Bucket=${DEPLOYMENT_BUCKET} \
        LambdaS3Key=budget-management-agent.zip \
      --capabilities CAPABILITY_NAMED_IAM \
      --stack-name budget-management-agent

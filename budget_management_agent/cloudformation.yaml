@@ -1,0 +1,449 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS Budget Management Agent - Proactive cost control and governance with intelligent budget management'
+
+Parameters:
+  DeploymentBucket:
+    Type: String
+    Description: S3 bucket name for deployment artifacts
+    MinLength: 3
+    MaxLength: 63
+    AllowedPattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$'
+    ConstraintDescription: Must be a valid S3 bucket name
+    
+  AppS3Key:
+    Type: String
+    Default: budget-management-agent/app.zip
+    Description: S3 key for the Lambda application code
+    
+  DependenciesS3Key:
+    Type: String
+    Default: budget-management-agent/dependencies.zip
+    Description: S3 key for the Lambda dependencies layer
+    
+  LambdaTimeout:
+    Type: Number
+    Default: 300
+    MinValue: 30
+    MaxValue: 900
+    Description: Lambda function timeout in seconds (30-900)
+    
+  LambdaMemorySize:
+    Type: Number
+    Default: 1024
+    MinValue: 128
+    MaxValue: 10240
+    Description: Lambda function memory size in MB (128-10240)
+    
+  LogRetentionDays:
+    Type: Number
+    Default: 30
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+    Description: CloudWatch log retention period in days
+    
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, staging, prod]
+    Description: Deployment environment
+    
+  EnableBudgetActions:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: Enable automated budget actions (requires additional permissions)
+
+Conditions:
+  EnableBudgetActionsCondition: !Equals [!Ref EnableBudgetActions, 'true']
+
+Resources:
+  # IAM Role for Budget Management Agent Lambda
+  BudgetManagementAgentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'finops-budget-management-agent-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BudgetManagementAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # AWS Budgets permissions
+              - Effect: Allow
+                Action:
+                  - budgets:CreateBudget
+                  - budgets:UpdateBudget
+                  - budgets:DeleteBudget
+                  - budgets:DescribeBudget
+                  - budgets:DescribeBudgets
+                  - budgets:DescribeBudgetPerformanceHistory
+                  - budgets:CreateNotification
+                  - budgets:UpdateNotification
+                  - budgets:DeleteNotification
+                  - budgets:DescribeNotificationsForBudget
+                  - budgets:CreateSubscriber
+                  - budgets:UpdateSubscriber
+                  - budgets:DeleteSubscriber
+                  - budgets:DescribeSubscribersForNotification
+                  - budgets:ListTagsForResource
+                  - budgets:TagResource
+                  - budgets:UntagResource
+                Resource: '*'
+              # Budget Actions permissions (conditional)
+              - !If
+                - EnableBudgetActionsCondition
+                - Effect: Allow
+                  Action:
+                    - budgets:CreateBudgetAction
+                    - budgets:UpdateBudgetAction
+                    - budgets:DeleteBudgetAction
+                    - budgets:DescribeBudgetAction
+                    - budgets:DescribeBudgetActionHistories
+                    - budgets:DescribeBudgetActionsForAccount
+                    - budgets:DescribeBudgetActionsForBudget
+                    - budgets:ExecuteBudgetAction
+                  Resource: '*'
+                - !Ref 'AWS::NoValue'
+              # Cost Explorer permissions for analysis
+              - Effect: Allow
+                Action:
+                  - ce:GetCostAndUsage
+                  - ce:GetUsageReport
+                  - ce:GetReservationCoverage
+                  - ce:GetReservationPurchaseRecommendation
+                  - ce:GetReservationUtilization
+                  - ce:GetSavingsPlansUtilization
+                  - ce:GetSavingsPlansCoverage
+                  - ce:ListCostCategoryDefinitions
+                  - ce:GetRightsizingRecommendation
+                  - ce:GetCostForecast
+                  - ce:GetUsageForecast
+                Resource: '*'
+              # DynamoDB permissions for state management
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:BatchGetItem
+                  - dynamodb:BatchWriteItem
+                Resource: 
+                  - !GetAtt BudgetStateTable.Arn
+                  - !Sub '${BudgetStateTable.Arn}/index/*'
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource: 
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/*'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:model/*'
+        - PolicyName: CloudWatchMetrics
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    'cloudwatch:namespace': 'FinOpsAgent'
+      Tags:
+        - Key: Project
+          Value: FinOpsAgent
+        - Key: Component
+          Value: BudgetManagementAgent
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Lambda Layer for Dependencies
+  BudgetManagementAgentDependenciesLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      LayerName: !Sub 'finops-budget-management-agent-deps-${Environment}'
+      Description: Dependencies for AWS Budget Management Agent (Strands SDK, boto3)
+      Content:
+        S3Bucket: !Ref DeploymentBucket
+        S3Key: !Ref DependenciesS3Key
+      CompatibleRuntimes:
+        - python3.11
+        - python3.12
+      CompatibleArchitectures:
+        - x86_64
+        - arm64
+
+  # Lambda Function
+  BudgetManagementAgentLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'finops-budget-management-agent-${Environment}'
+      Description: AWS Budget Management Agent for proactive cost control and governance
+      Runtime: python3.11
+      Handler: lambda_handler.handler
+      Role: !GetAtt BudgetManagementAgentRole.Arn
+      Code:
+        S3Bucket: !Ref DeploymentBucket
+        S3Key: !Ref AppS3Key
+      Timeout: !Ref LambdaTimeout
+      MemorySize: !Ref LambdaMemorySize
+      Layers:
+        - !Ref BudgetManagementAgentDependenciesLayer
+      Environment:
+        Variables:
+          REGION: !Ref AWS::Region
+          LOG_LEVEL: INFO
+          ENVIRONMENT: !Ref Environment
+          POWERTOOLS_SERVICE_NAME: budget-management-agent
+          POWERTOOLS_METRICS_NAMESPACE: FinOpsAgent
+          BUDGET_STATE_TABLE: !Ref BudgetStateTable
+          AWS_ACCOUNT_ID: !Ref AWS::AccountId
+          ENABLE_BUDGET_ACTIONS: !Ref EnableBudgetActions
+          BUDGET_ACTION_ROLE_ARN: !If
+            - EnableBudgetActionsCondition
+            - !GetAtt BudgetActionExecutionRole.Arn
+            - !Ref 'AWS::NoValue'
+      ReservedConcurrencyLimit: 10
+      DeadLetterQueue:
+        TargetArn: !GetAtt BudgetManagementAgentDLQ.Arn
+      Tags:
+        - Key: Project
+          Value: FinOpsAgent
+        - Key: Component
+          Value: BudgetManagementAgent
+        - Key: Environment
+          Value: !Ref Environment
+
+  # DynamoDB Table for Budget State Management
+  BudgetStateTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'finops-budget-state-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: budget_name
+          AttributeType: S
+        - AttributeName: account_id
+          AttributeType: S
+        - AttributeName: created_date
+          AttributeType: S
+      KeySchema:
+        - AttributeName: budget_name
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: AccountIndex
+          KeySchema:
+            - AttributeName: account_id
+              KeyType: HASH
+            - AttributeName: created_date
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      Tags:
+        - Key: Project
+          Value: FinOpsAgent
+        - Key: Component
+          Value: BudgetManagementAgent
+        - Key: Environment
+          Value: !Ref Environment
+
+  # CloudWatch Log Group
+  BudgetManagementAgentLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/finops-budget-management-agent-${Environment}'
+      RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: Project
+          Value: FinOpsAgent
+        - Key: Component
+          Value: BudgetManagementAgent
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Dead Letter Queue for failed invocations
+  BudgetManagementAgentDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'finops-budget-management-agent-dlq-${Environment}'
+      MessageRetentionPeriod: 1209600  # 14 days
+      Tags:
+        - Key: Project
+          Value: FinOpsAgent
+        - Key: Component
+          Value: BudgetManagementAgent
+        - Key: Environment
+          Value: !Ref Environment
+
+  # IAM Role for Budget Actions (conditional)
+  BudgetActionExecutionRole:
+    Type: AWS::IAM::Role
+    Condition: EnableBudgetActionsCondition
+    Properties:
+      RoleName: !Sub 'finops-budget-action-execution-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: budgets.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: BudgetActionExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # IAM permissions for applying policies (limited scope)
+              - Effect: Allow
+                Action:
+                  - iam:AttachUserPolicy
+                  - iam:AttachGroupPolicy
+                  - iam:AttachRolePolicy
+                  - iam:DetachUserPolicy
+                  - iam:DetachGroupPolicy
+                  - iam:DetachRolePolicy
+                  - iam:ListAttachedUserPolicies
+                  - iam:ListAttachedGroupPolicies
+                  - iam:ListAttachedRolePolicies
+                Resource: 
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:user/*'
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:group/*'
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:role/*'
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:policy/FinOpsBudgetControl*'
+              # EC2 permissions for instance control
+              - Effect: Allow
+                Action:
+                  - ec2:StopInstances
+                  - ec2:StartInstances
+                  - ec2:DescribeInstances
+                  - ec2:DescribeInstanceStatus
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    'ec2:ResourceTag/FinOpsBudgetControlled': 'true'
+              # SNS permissions for notifications
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Sub 'arn:aws:sns:${AWS::Region}:${AWS::AccountId}:FinOpsBudgetAlerts*'
+      Tags:
+        - Key: Project
+          Value: FinOpsAgent
+        - Key: Component
+          Value: BudgetManagementAgent
+        - Key: Environment
+          Value: !Ref Environment
+
+  # CloudWatch Alarms
+  BudgetManagementAgentErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'finops-budget-management-agent-errors-${Environment}'
+      AlarmDescription: Monitor errors in Budget Management Agent
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref BudgetManagementAgentLambda
+      TreatMissingData: notBreaching
+
+  BudgetManagementAgentDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'finops-budget-management-agent-duration-${Environment}'
+      AlarmDescription: Monitor duration of Budget Management Agent
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: !Ref LambdaTimeout
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref BudgetManagementAgentLambda
+      TreatMissingData: notBreaching
+
+  # Lambda permissions for invocation
+  BudgetManagementAgentInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BudgetManagementAgentLambda
+      Action: lambda:InvokeFunction
+      Principal: lambda.amazonaws.com
+      SourceArn: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:finops-supervisor-agent-*'
+
+Outputs:
+  BudgetManagementAgentFunctionName:
+    Description: Budget Management Agent Lambda Function Name
+    Value: !Ref BudgetManagementAgentLambda
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunctionName'
+    
+  BudgetManagementAgentFunctionArn:
+    Description: Budget Management Agent Lambda Function ARN
+    Value: !GetAtt BudgetManagementAgentLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunctionArn'
+    
+  BudgetManagementAgentRoleArn:
+    Description: Budget Management Agent Lambda Role ARN
+    Value: !GetAtt BudgetManagementAgentRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaRoleArn'
+    
+  BudgetStateTableName:
+    Description: Budget State DynamoDB Table Name
+    Value: !Ref BudgetStateTable
+    Export:
+      Name: !Sub '${AWS::StackName}-StateTableName'
+      
+  BudgetStateTableArn:
+    Description: Budget State DynamoDB Table ARN
+    Value: !GetAtt BudgetStateTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-StateTableArn'
+    
+  DependenciesLayerArn:
+    Description: Budget Management Agent Dependencies Layer ARN
+    Value: !Ref BudgetManagementAgentDependenciesLayer
+    Export:
+      Name: !Sub '${AWS::StackName}-DependenciesLayerArn'
+      
+  BudgetActionExecutionRoleArn:
+    Condition: EnableBudgetActionsCondition
+    Description: Budget Action Execution Role ARN
+    Value: !GetAtt BudgetActionExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ActionExecutionRoleArn'
+      
+  LogGroupName:
+    Description: CloudWatch Log Group Name
+    Value: !Ref BudgetManagementAgentLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-LogGroupName'

@@ -1,12 +1,16 @@
-# Node.js dependencies
-node_modules/
-npm-debug.log
-yarn-debug.log
-yarn-error.log
-package-lock.json
-yarn.lock
-.npm/
-.cache/
+# FinOps Agent - Open Source .gitignore
+
+# Environment variables and secrets
+.env
+.env.local
+.env.production
+.env.development
+*.env
+
+# AWS credentials and config
+.aws/
+aws-credentials.json
+deployment-config.json
 
 # Python
 __pycache__/
@@ -14,7 +18,6 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
 build/
 develop-eggs/
 dist/
@@ -26,22 +29,60 @@ lib64/
 parts/
 sdist/
 var/
+wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-venv/
-.venv/
-ENV/
+MANIFEST
 
-# IDE files
-.idea/
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+
+# React build
+/finops-ui/build/
+/finops-ui/.env.local
+/finops-ui/.env.development.local
+/finops-ui/.env.test.local
+/finops-ui/.env.production.local
+
+# Lambda deployment packages and builds
+*.zip
+lambda-deployment-*.zip
+deployment-packages/
+*/dist/
+*/build/
+websocket_api/build/
+
+# CloudFormation
+cloudformation-packaged.yaml
+packaged-template.yaml
+
+# IDE and editors
 .vscode/
+.idea/
 *.swp
 *.swo
+*~
+
+# OS generated files
 .DS_Store
-.project
-.classpath
-.settings/
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
 # Logs
 logs/
@@ -51,134 +92,93 @@ yarn-debug.log*
 yarn-error.log*
 
 # Runtime data
-pids
+pids/
 *.pid
 *.seed
 *.pid.lock
 
-# Coverage directory
+# Coverage directory used by tools like istanbul
 coverage/
-.nyc_output
+.nyc_output/
 
-# Temporary files
-tmp/
-temp/
-.tmp/
-repl_state/
+# Dependency directories
+jspm_packages/
 
-# AWS specific
-.aws-sam/
-samconfig.toml
-.aws-config/
-.amazonq/
+# Optional npm cache directory
+.npm
 
-# Local environment files
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
 
-# Command logger output
-chatlog.md
-chatlog_summary.md
-chatcompact.json
+# Serverless directories
+.serverless/
 
-# Misc
-.DS_Store
-Thumbs.db
+# AWS SAM
+.aws-sam/
 
-# Local python scripts
-command_logger.sh
-log_conversation.sh
-setup_command_logging.sh
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
 
-# ===== ENHANCED CLEANUP PATTERNS =====
+# Security and temporary files
+security_reports/
+security_backup*/
+*.security
+temp/
+tmp/
 
-# Memory and debug files
-memory-*.json
-*-memory.json
-finopsDirHistory.json
-finops-project.json
+# Test artifacts
+test-results/
+coverage-reports/
 
-# Response and test artifacts
-response*.json
-test*_response.json
-*_test.json
-payload.json
-payload.txt
+# Documentation build
+docs/_build/
+site/
 
-# Backup files with timestamps and versions
-*_backup_*.py
-*_backup_*.js
-*_backup_*.yaml
-*_backup_*.json
-*_original.*
-*_fixed*.py
-*_fixed_v*.py
-*_enhanced.py
-*_temp.py
+# Local development
+local-config.json
+dev-*.json
 
-# Build artifacts and deployment packages
-*.zip
-!templates/*.zip
-!examples/*.zip
-!deployment-templates/*.zip
-finops-ui-build*.zip
-finops-ui-project.zip
-finops_agent_lambda.zip
-*-agent.zip
-*-lambda.zip
-package/
-packaging/
+# Project cleanup and internal documentation
+CLEANUP_SUMMARY.md
+OPEN_SOURCE_PROGRESS.md
+OPEN_SOURCE_PUBLICATION_PLAN.md
+*cleanup*
+*CLEANUP*
 
-# UI deployment packages and iterations
-finops-ui/deployment-package-*/
-finops-ui/finops-ui-*.zip
+# Backup and temporary files
+*.bak
+*.backup
+*.orig
+*.tmp
+*~
 
-# Agent-specific build artifacts
-aws-cost-forecast-agent/*.zip
-trusted-advisor-agent/*.zip
-budget-management-agent/*.zip
-supervisor-agent/*.zip
-websocket-api/build/*.zip
+# UI development artifacts
+/finops-ui/*.zip
+finops-ui-*.zip
 
-# Lambda packaging directories
-*/packaging/_dependencies/
-*/layer/
-
-# CloudFormation outputs and generated configs
-cloudformation-outputs/
-*-outputs.json
-*-stack-outputs.json
-
-# Documentation that can be regenerated
-strands_documentation.md
-strands_documentation_raw.json
-
-# Deployment temporary files
-deployment-package-*/
-*-deployment.zip
-
-# Unused directories
-finops-agent-ui/
-old/
-archive/
-backup/
-deprecated/
-
-# Additional cache and temporary files
+# Development and testing
 .pytest_cache/
 .coverage
 htmlcov/
+.tox/
+.cache/
+cache/
 
-# AWS CDK
-cdk.out/
-cdk.context.json
+# Docker
+.dockerignore
+docker-compose.override.yml
 
-# Sensitive files (additional protection)
-*.pem
-*.key
-*.crt
-secrets.json
-credentials.json
+# Local configuration overrides
+config.local.json
+settings.local.json

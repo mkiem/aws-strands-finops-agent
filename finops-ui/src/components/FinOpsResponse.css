@@ -25,32 +25,6 @@
   font-size: 1.2rem;
 }
 
-.cost-summary-card {
-  background: linear-gradient(135deg, #0066cc 0%, #0099ff 100%);
-  color: white;
-  border-radius: 8px;
-  padding: 20px;
-  margin: 20px 0;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-.service-name {
-  font-size: 1.2rem;
-  font-weight: 500;
-  margin-bottom: 10px;
-}
-
-.cost-amount {
-  font-size: 2.5rem;
-  font-weight: 700;
-  margin: 10px 0;
-}
-
-.time-period {
-  font-size: 0.9rem;
-  opacity: 0.9;
-}
-
 .response-section {
   padding: 10px 0;
   line-height: 1.6;

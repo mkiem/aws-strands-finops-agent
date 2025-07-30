@@ -37,7 +37,7 @@ aws apigateway put-integration \
   --http-method POST \
   --type AWS_PROXY \
   --integration-http-method POST \
-  --uri arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:837882009522:function:finops-agent:function:finops-agent/invocations
+  --uri arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:${AWS_ACCOUNT_ID}:function:finops-agent:function:finops-agent/invocations
 
 # Deploy the API
 aws apigateway create-deployment \

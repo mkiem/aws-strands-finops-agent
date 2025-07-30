@@ -123,7 +123,7 @@ aws iam put-role-policy \
 # Set the roles for the identity pool
 aws cognito-identity set-identity-pool-roles \
   --identity-pool-id $IDENTITY_POOL_ID \
-  --roles authenticated=arn:aws:iam::837882009522:role/FinOpsStrands_AuthRole,unauthenticated=arn:aws:iam::837882009522:role/FinOpsStrands_UnauthRole
+  --roles authenticated=arn:aws:iam::${AWS_ACCOUNT_ID}:role/FinOpsStrands_AuthRole,unauthenticated=arn:aws:iam::${AWS_ACCOUNT_ID}:role/FinOpsStrands_UnauthRole
 ```
 
 ### Using AWS Console
@@ -209,7 +209,7 @@ const awsmobile = {
     "aws_cloud_logic_custom": [
         {
             "name": "finopsAgentAPI",
-            "endpoint": "https://x015blgao0.execute-api.us-east-1.amazonaws.com/prod",
+            "endpoint": "${API_GATEWAY_ENDPOINT}",
             "region": "us-east-1"
         }
     ]

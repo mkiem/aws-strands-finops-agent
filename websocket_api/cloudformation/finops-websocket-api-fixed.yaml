@@ -9,7 +9,7 @@ Parameters:
   
   LambdaS3Bucket:
     Type: String
-    Default: finops-deployment-packages-062025
+    Default: ${DEPLOYMENT_BUCKET}
     Description: S3 bucket containing Lambda deployment packages
 
 Resources:
@@ -55,7 +55,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub '${ProjectName}-processing-queue'
-      VisibilityTimeout: 900  # 15 minutes (FIXED PROPERTY NAME)
+      VisibilityTimeout: 360  # 6 minutes (FIXED PROPERTY NAME)
       MessageRetentionPeriod: 1209600  # 14 days
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt ProcessingDeadLetterQueue.Arn
@@ -181,7 +181,7 @@ Resources:
           JOBS_TABLE: !Ref JobsTable
           WEBSOCKET_ENDPOINT: !Sub 'https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
           LOG_LEVEL: INFO
-      Timeout: 900  # 15 minutes
+      Timeout: 360  # 6 minutes
       MemorySize: 512
       Tags:
         - Key: Project

@@ -77,7 +77,7 @@ zip -r ../finops-ui-build.zip .
 
 # Upload to S3
 cd ..
-aws s3 cp finops-ui-build.zip s3://finops-deployment-packages-062025/finops-ui-build.zip
+aws s3 cp finops-ui-build.zip s3://${DEPLOYMENT_BUCKET}/finops-ui-build.zip
 
 # Clean up
 rm -rf deployment-package
@@ -90,9 +90,9 @@ rm -rf deployment-package
 ```bash
 # Deploy to an existing Amplify app
 aws amplify start-deployment \
-  --app-id da7jmqelobr5a \
+  --app-id ${AMPLIFY_APP_ID} \
   --branch-name staging \
-  --source-url s3://finops-deployment-packages-062025/finops-ui-build.zip
+  --source-url s3://${DEPLOYMENT_BUCKET}/finops-ui-build.zip
 ```
 
 ### Option 2: Creating a New Amplify App
@@ -121,7 +121,7 @@ aws amplify update-app \
 aws amplify start-deployment \
   --app-id $APP_ID \
   --branch-name staging \
-  --source-url s3://finops-deployment-packages-062025/finops-ui-build.zip
+  --source-url s3://${DEPLOYMENT_BUCKET}/finops-ui-build.zip
 ```
 
 ## Authentication Setup
@@ -136,7 +136,7 @@ aws amplify start-deployment \
 2. **Set Environment Variables**:
    ```bash
    aws amplify update-branch \
-     --app-id da7jmqelobr5a \
+     --app-id ${AMPLIFY_APP_ID} \
      --branch-name staging \
      --environment-variables '{
        "REACT_APP_AWS_PROJECT_REGION": "us-east-1",
@@ -144,7 +144,7 @@ aws amplify start-deployment \
        "REACT_APP_AWS_COGNITO_REGION": "us-east-1",
        "REACT_APP_AWS_USER_POOLS_ID": "us-east-1_DQpPM15TX",
        "REACT_APP_AWS_USER_POOLS_WEB_CLIENT_ID": "4evk2m4ru8rrenij1ukg0044k6",
-       "REACT_APP_API_ENDPOINT": "https://x015blgao0.execute-api.us-east-1.amazonaws.com/prod"
+       "REACT_APP_API_ENDPOINT": "${API_GATEWAY_ENDPOINT}"
      }'
    ```
 
@@ -161,7 +161,7 @@ aws amplify start-deployment \
 
 The UI integrates with the FinOps Agent Lambda function through API Gateway:
 
-- **API Endpoint**: `https://71mmhvzkuh.execute-api.us-east-1.amazonaws.com/prod/query`
+- **API Endpoint**: `${MAIN_API_ENDPOINT}/query`
 - **Method**: POST
 - **Request Format**:
   ```json
@@ -229,10 +229,10 @@ The UI integrates with the FinOps Agent Lambda function through API Gateway:
 
 ## Current Deployment Information
 
-- **Amplify App ID**: `da7jmqelobr5a`
+- **Amplify App ID**: `${AMPLIFY_APP_ID}`
 - **App Name**: AWS Fin Ops
 - **Branch**: staging
-- **Deployment URL**: [https://staging.da7jmqelobr5a.amplifyapp.com](https://staging.da7jmqelobr5a.amplifyapp.com)
+- **Deployment URL**: [https://staging.${AMPLIFY_APP_ID}.amplifyapp.com](https://staging.${AMPLIFY_APP_ID}.amplifyapp.com)
 - **Deployment Status**: SUCCEED
 - **Last Deployment**: June 10, 2025
 

@@ -16,10 +16,10 @@ const config = {
         websocketEndpoint: 'wss://rtswivmeqj.execute-api.us-east-1.amazonaws.com/prod',
         
         // Private Function URL (CORS limitations with browsers)
-        privateEndpoint: 'https://bybfgjmve5b5m4baexntp62d3e0dqjty.lambda-url.us-east-1.on.aws/',
+        privateEndpoint: '${LAMBDA_FUNCTION_URL}',
         
         // Legacy API Gateway (fallback)
-        legacyEndpoint: 'https://mdog752949.execute-api.us-east-1.amazonaws.com/prod/query',
+        legacyEndpoint: '${LEGACY_API_ENDPOINT}',
         
         // Default to WebSocket
         useWebSocket: true

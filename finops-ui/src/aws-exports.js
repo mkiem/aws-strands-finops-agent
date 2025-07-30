@@ -11,7 +11,7 @@ const awsmobile = {
     "aws_cloud_logic_custom": [
         {
             "name": "finopsAgentAPI",
-            "endpoint": "https://x015blgao0.execute-api.us-east-1.amazonaws.com/prod",
+            "endpoint": "${API_GATEWAY_ENDPOINT}",
             "region": "us-east-1"
         }
     ]

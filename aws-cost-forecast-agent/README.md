@@ -1,95 +1,297 @@
-# FinOps Agent Response Formatting
+# AWS Cost Forecast Agent
 
-This document explains the implementation of structured response formatting for the FinOps Agent.
+The AWS Cost Forecast Agent is a serverless component of the FinOps Agent system that provides intelligent cost analysis and forecasting capabilities using AWS Cost Explorer APIs and AI-powered insights.
 
-## Overview
+## 🎯 **Features**
 
-The FinOps Agent now uses Strands content blocks to format responses in a more user-friendly way. This implementation:
+- **Cost Analysis**: Real-time AWS cost and usage analysis
+- **Forecasting**: Predictive cost modeling up to 12 months
+- **Service Breakdown**: Detailed cost analysis by AWS service
+- **Trend Analysis**: Historical cost trends and patterns
+- **AI-Powered Insights**: Intelligent cost optimization recommendations
+- **Multi-dimensional Analysis**: Cost analysis by region, service, usage type
 
-1. Extracts cost data from the agent's responses
-2. Structures the data with clear headings and formatting
-3. Presents the information in a consistent, readable format
+## 🏗️ **Architecture**
 
-## Implementation Details
-
-### Content Blocks
-
-The agent uses Strands content blocks to structure responses. Each block contains a piece of formatted text that can include markdown formatting:
-
-```python
-content_blocks = [
-    {"text": f"# Amazon S3 Cost Summary\n\n"},
-    {"text": f"## Total Cost: ${cost_value:.2f} {currency}\n\n"},
-    {"text": f"**Time Period**: {start_date} to {end_date}\n\n"},
-    {"text": f"**Usage**: {format(usage_units, ',')} units\n\n"},
-    {"text": f"---\n\n"},
-    {"text": f"Additional information and context...\n\n"}
-]
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Supervisor    │    │  Cost Forecast   │    │   AWS Cost      │
+│   Agent         │───►│  Agent           │───►│   Explorer      │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                                │
+                                ▼
+                       ┌──────────────────┐
+                       │   Amazon         │
+                       │   Bedrock        │
+                       └──────────────────┘
 ```
 
-### Data Extraction
+### Components
 
-The implementation includes a function to extract cost data from the agent's responses:
+- **Lambda Function**: Serverless execution environment
+- **IAM Role**: Secure access to AWS Cost Explorer and Bedrock
+- **CloudWatch Logs**: Centralized logging and monitoring
+- **Dead Letter Queue**: Error handling for failed invocations
+- **Dependencies Layer**: Shared libraries (Strands SDK, boto3)
 
-```python
-def extract_cost_data(response_text: str) -> Dict[str, Any]:
-    # Extract cost value, date range, usage units, and service name
-    # from the response text using regular expressions
-    ...
-```
+## 🚀 **Quick Deployment**
 
-### Response Formatting
+### Prerequisites
 
-The `format_cost_response` function creates a well-structured response with proper headers and content blocks:
+- AWS CLI configured with appropriate permissions
+- Python 3.11+ installed
+- S3 bucket for deployment artifacts
 
-```python
-def format_cost_response(
-    query: str,
-    response_text: str,
-    cost_value: float,
-    currency: str = "USD",
-    start_date: str = "",
-    end_date: str = "",
-    usage_units: int = 0,
-    service_name: str = ""
-) -> Dict[str, Any]:
-    # Create structured content blocks
-    ...
-```
-
-## Testing
-
-You can test the formatting using the included `test_formatting.py` script:
+### One-Command Deployment
 
 ```bash
-cd /home/ec2-user/projects/finopsAgent/my_agent
-python test_formatting.py
+./deploy.sh --bucket YOUR_DEPLOYMENT_BUCKET
 ```
 
-This will simulate a request to the Lambda handler and display the formatted response.
+### Manual Deployment
 
-## Example Response
+1. **Build packages**:
+   ```bash
+   ./build_lambda_package.sh
+   ```
 
-A formatted response for an S3 cost query looks like:
+2. **Upload to S3**:
+   ```bash
+   aws s3 cp dist/app.zip s3://YOUR_BUCKET/aws-cost-forecast-agent/app.zip
+   aws s3 cp dist/dependencies.zip s3://YOUR_BUCKET/aws-cost-forecast-agent/dependencies.zip
+   ```
 
+3. **Deploy CloudFormation**:
+   ```bash
+   aws cloudformation deploy \
+     --template-file cloudformation.yaml \
+     --stack-name finops-cost-forecast-agent-prod \
+     --parameter-overrides DeploymentBucket=YOUR_BUCKET \
+     --capabilities CAPABILITY_NAMED_IAM
+   ```
+
+## 📋 **Configuration**
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `REGION` | AWS region | Auto-detected |
+| `LOG_LEVEL` | Logging level | `INFO` |
+| `ENVIRONMENT` | Deployment environment | `prod` |
+
+### CloudFormation Parameters
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `DeploymentBucket` | S3 bucket for artifacts | Required |
+| `Environment` | Deployment environment | `prod` |
+| `LambdaTimeout` | Function timeout (seconds) | `300` |
+| `LambdaMemorySize` | Memory allocation (MB) | `512` |
+| `LogRetentionDays` | Log retention period | `30` |
+
+## 🔧 **Usage**
+
+### Query Examples
+
+The agent responds to natural language queries about AWS costs:
+
+```python
+# Example invocation payload
+{
+    "query": "What is my current AWS spend?",
+    "context": {
+        "user_id": "user123",
+        "session_id": "session456"
+    }
+}
 ```
-# Amazon S3 Cost Summary
 
-## Total Cost: $0.07 USD
+### Supported Query Types
 
-**Time Period**: 2025-06-01 to 2025-06-09 (first 9 days of June 2025)
+- **Current Costs**: "What is my current AWS spend?"
+- **Service Breakdown**: "Show me costs by service"
+- **Time Comparisons**: "Compare this month to last month"
+- **Forecasting**: "Forecast my costs for next quarter"
+- **Trend Analysis**: "Show me cost trends over the last year"
 
-**Usage**: 196,336 units
+## 📊 **Monitoring**
+
+### CloudWatch Metrics
+
+- **Invocations**: Function execution count
+- **Duration**: Execution time
+- **Errors**: Error rate and count
+- **Throttles**: Concurrency throttling
+
+### CloudWatch Alarms
+
+- **Error Rate**: Triggers when error rate exceeds threshold
+- **Duration**: Monitors execution time
+- **Dead Letter Queue**: Alerts on failed invocations
+
+### Log Analysis
+
+```bash
+# View recent logs
+aws logs tail /aws/lambda/finops-cost-forecast-agent-prod --follow
+
+# Search for errors
+aws logs filter-log-events \
+  --log-group-name /aws/lambda/finops-cost-forecast-agent-prod \
+  --filter-pattern "ERROR"
+```
+
+## 🔒 **Security**
+
+### IAM Permissions
+
+The agent requires these AWS permissions:
+
+- **Cost Explorer**: Full access to cost and usage data
+- **Bedrock**: Model invocation for AI insights
+- **CloudWatch Logs**: Logging and monitoring
+
+### Security Features
+
+- **No Hardcoded Credentials**: Uses IAM roles
+- **Least Privilege Access**: Minimal required permissions
+- **Encrypted Logs**: CloudWatch logs encryption
+- **VPC Support**: Optional VPC deployment
+- **Dead Letter Queue**: Secure error handling
+
+## 🧪 **Testing**
+
+### Unit Tests
+
+```bash
+# Run tests (when available)
+python -m pytest tests/
+```
+
+### Integration Testing
+
+```bash
+# Test deployment
+aws lambda invoke \
+  --function-name finops-cost-forecast-agent-prod \
+  --payload '{"query": "What is my current AWS spend?"}' \
+  response.json
+
+cat response.json
+```
+
+### Load Testing
+
+```bash
+# Concurrent invocations
+for i in {1..10}; do
+  aws lambda invoke \
+    --function-name finops-cost-forecast-agent-prod \
+    --payload '{"query": "Show me cost trends"}' \
+    --invocation-type Event \
+    response_$i.json &
+done
+wait
+```
+
+## 🚨 **Troubleshooting**
+
+### Common Issues
+
+1. **Permission Errors**
+   ```bash
+   # Check IAM role permissions
+   aws iam get-role-policy \
+     --role-name finops-cost-forecast-agent-role-prod \
+     --policy-name CostExplorerAccess
+   ```
+
+2. **Timeout Issues**
+   - Increase `LambdaTimeout` parameter
+   - Optimize query complexity
+   - Check Cost Explorer API limits
+
+3. **Memory Issues**
+   - Increase `LambdaMemorySize` parameter
+   - Monitor CloudWatch metrics
+   - Optimize data processing
+
+### Debug Mode
+
+Enable debug logging:
+
+```bash
+aws lambda update-function-configuration \
+  --function-name finops-cost-forecast-agent-prod \
+  --environment Variables='{LOG_LEVEL=DEBUG}'
+```
+
+## 📚 **API Reference**
+
+### Input Format
+
+```json
+{
+  "query": "string",
+  "context": {
+    "user_id": "string",
+    "session_id": "string",
+    "preferences": {}
+  },
+  "options": {
+    "include_forecast": true,
+    "time_range": "last_30_days",
+    "granularity": "MONTHLY"
+  }
+}
+```
+
+### Output Format
+
+```json
+{
+  "response": "string",
+  "data": {
+    "current_spend": 1234.56,
+    "forecast": [...],
+    "breakdown": {...}
+  },
+  "metadata": {
+    "execution_time": 1.23,
+    "data_freshness": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+## 🔄 **Updates and Maintenance**
+
+### Updating Dependencies
+
+1. Update `requirements.txt`
+2. Rebuild packages: `./build_lambda_package.sh`
+3. Redeploy: `./deploy.sh --bucket YOUR_BUCKET --deploy-only`
+
+### Scaling Configuration
+
+```bash
+# Update memory and timeout
+aws cloudformation update-stack \
+  --stack-name finops-cost-forecast-agent-prod \
+  --use-previous-template \
+  --parameters \
+    ParameterKey=LambdaMemorySize,ParameterValue=1024 \
+    ParameterKey=LambdaTimeout,ParameterValue=600
+```
+
+## 📄 **License**
+
+This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details.
+
+## 🤝 **Contributing**
+
+Please read [CONTRIBUTING.md](../CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
 ---
 
-This represents your Amazon Simple Storage Service (S3) costs for approximately the first 9 days of June 2025.
-
-Would you like me to provide any cost optimization recommendations for your S3 usage, or do you need information about specific aspects of your S3 spending?
-```
-
-## Next Steps
-
-1. Enhance the data extraction to handle more complex cost queries
-2. Add visualization capabilities (charts, graphs) for cost data
-3. Implement more sophisticated formatting for different query types
+**Part of the [FinOps Agent](../README.md) project**

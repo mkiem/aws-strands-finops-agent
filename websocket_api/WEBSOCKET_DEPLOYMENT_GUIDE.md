@@ -8,7 +8,7 @@ This guide provides step-by-step instructions for deploying the WebSocket API fo
 
 ### AWS Resources
 - AWS CLI configured with appropriate permissions
-- S3 bucket for deployment packages: `finops-deployment-packages-062025`
+- S3 bucket for deployment packages: `${DEPLOYMENT_BUCKET}`
 - Existing FinOps agents deployed:
   - `aws-cost-forecast-agent`
   - `trusted-advisor-agent-trusted-advisor-agent`
@@ -64,9 +64,9 @@ This creates three deployment packages:
 ```bash
 # Upload all packages to S3
 cd build
-aws s3 cp websocket-connection-manager.zip s3://finops-deployment-packages-062025/
-aws s3 cp websocket-message-handler.zip s3://finops-deployment-packages-062025/
-aws s3 cp websocket-background-processor.zip s3://finops-deployment-packages-062025/
+aws s3 cp websocket-connection-manager.zip s3://${DEPLOYMENT_BUCKET}/
+aws s3 cp websocket-message-handler.zip s3://${DEPLOYMENT_BUCKET}/
+aws s3 cp websocket-background-processor.zip s3://${DEPLOYMENT_BUCKET}/
 cd ..
 ```
 
@@ -78,7 +78,7 @@ aws cloudformation deploy \
   --template-file cloudformation/finops-websocket-api-fixed.yaml \
   --parameter-overrides \
     ProjectName=finops-websocket \
-    LambdaS3Bucket=finops-deployment-packages-062025 \
+    LambdaS3Bucket=${DEPLOYMENT_BUCKET} \
   --capabilities CAPABILITY_NAMED_IAM \
   --stack-name finops-websocket-api \
   --region us-east-1
@@ -140,8 +140,8 @@ const config = {
     },
     api: {
         websocketEndpoint: 'wss://rtswivmeqj.execute-api.us-east-1.amazonaws.com/prod',
-        privateEndpoint: 'https://bybfgjmve5b5m4baexntp62d3e0dqjty.lambda-url.us-east-1.on.aws/',
-        legacyEndpoint: 'https://mdog752949.execute-api.us-east-1.amazonaws.com/prod/query',
+        privateEndpoint: '${LAMBDA_FUNCTION_URL}',
+        legacyEndpoint: '${LEGACY_API_ENDPOINT}',
         useWebSocket: true
     }
 };
@@ -163,13 +163,13 @@ zip -r ../finops-ui-websocket-deployed.zip .
 cd ..
 
 # Upload to S3
-aws s3 cp finops-ui-websocket-deployed.zip s3://finops-deployment-packages-062025/
+aws s3 cp finops-ui-websocket-deployed.zip s3://${DEPLOYMENT_BUCKET}/
 
 # Deploy to Amplify
 aws amplify start-deployment \
-  --app-id da7jmqelobr5a \
+  --app-id ${AMPLIFY_APP_ID} \
   --branch-name staging \
-  --source-url s3://finops-deployment-packages-062025/finops-ui-websocket-deployed.zip
+  --source-url s3://${DEPLOYMENT_BUCKET}/finops-ui-websocket-deployed.zip
 
 # Clean up
 rm -rf deployment-package finops-ui-websocket-deployed.zip
@@ -177,7 +177,7 @@ rm -rf deployment-package finops-ui-websocket-deployed.zip
 
 ### Step 9: Verify End-to-End Functionality
 
-1. **Access the UI**: https://staging.da7jmqelobr5a.amplifyapp.com
+1. **Access the UI**: https://staging.${AMPLIFY_APP_ID}.amplifyapp.com
 2. **Login**: Use test credentials (testuser / SecurePassword123!)
 3. **Test WebSocket**: Submit a FinOps query and verify:
    - WebSocket connection establishes
@@ -243,25 +243,25 @@ cd websocket_api
 
 # Upload to S3
 cd build
-aws s3 cp websocket-connection-manager.zip s3://finops-deployment-packages-062025/
-aws s3 cp websocket-message-handler.zip s3://finops-deployment-packages-062025/
-aws s3 cp websocket-background-processor.zip s3://finops-deployment-packages-062025/
+aws s3 cp websocket-connection-manager.zip s3://${DEPLOYMENT_BUCKET}/
+aws s3 cp websocket-message-handler.zip s3://${DEPLOYMENT_BUCKET}/
+aws s3 cp websocket-background-processor.zip s3://${DEPLOYMENT_BUCKET}/
 cd ..
 
 # Update Lambda functions
 aws lambda update-function-code \
   --function-name finops-websocket-connection-manager \
-  --s3-bucket finops-deployment-packages-062025 \
+  --s3-bucket ${DEPLOYMENT_BUCKET} \
   --s3-key websocket-connection-manager.zip
 
 aws lambda update-function-code \
   --function-name finops-websocket-message-handler \
-  --s3-bucket finops-deployment-packages-062025 \
+  --s3-bucket ${DEPLOYMENT_BUCKET} \
   --s3-key websocket-message-handler.zip
 
 aws lambda update-function-code \
   --function-name finops-websocket-background-processor \
-  --s3-bucket finops-deployment-packages-062025 \
+  --s3-bucket ${DEPLOYMENT_BUCKET} \
   --s3-key websocket-background-processor.zip
 
 # Redeploy WebSocket API
@@ -284,12 +284,12 @@ cd deployment-package
 zip -r ../finops-ui-updated.zip .
 cd ..
 
-aws s3 cp finops-ui-updated.zip s3://finops-deployment-packages-062025/
+aws s3 cp finops-ui-updated.zip s3://${DEPLOYMENT_BUCKET}/
 
 aws amplify start-deployment \
-  --app-id da7jmqelobr5a \
+  --app-id ${AMPLIFY_APP_ID} \
   --branch-name staging \
-  --source-url s3://finops-deployment-packages-062025/finops-ui-updated.zip
+  --source-url s3://${DEPLOYMENT_BUCKET}/finops-ui-updated.zip
 
 rm -rf deployment-package finops-ui-updated.zip
 ```
@@ -324,9 +324,9 @@ aws cloudformation delete-stack --stack-name finops-websocket-api
 ```bash
 # Deploy previous version from S3
 aws amplify start-deployment \
-  --app-id da7jmqelobr5a \
+  --app-id ${AMPLIFY_APP_ID} \
   --branch-name staging \
-  --source-url s3://finops-deployment-packages-062025/finops-ui-previous-version.zip
+  --source-url s3://${DEPLOYMENT_BUCKET}/finops-ui-previous-version.zip
 ```
 
 ## Troubleshooting
@@ -367,7 +367,7 @@ aws dynamodb describe-table --table-name finops-websocket-connections --query 'T
 aws dynamodb describe-table --table-name finops-websocket-jobs --query 'Table.TableStatus'
 
 # Check SQS queue
-aws sqs get-queue-attributes --queue-url https://sqs.us-east-1.amazonaws.com/837882009522/finops-websocket-processing-queue --attribute-names All
+aws sqs get-queue-attributes --queue-url https://sqs.us-east-1.amazonaws.com/${AWS_ACCOUNT_ID}/finops-websocket-processing-queue --attribute-names All
 ```
 
 ## Security Considerations

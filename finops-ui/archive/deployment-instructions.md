@@ -60,7 +60,7 @@ zip -r ../finops-ui-build.zip .
 
 # Upload to S3
 cd ..
-aws s3 cp finops-ui-build.zip s3://finops-deployment-packages-062025/finops-ui-build.zip
+aws s3 cp finops-ui-build.zip s3://${DEPLOYMENT_BUCKET}/finops-ui-build.zip
 
 # Clean up
 rm -rf deployment-package
@@ -103,7 +103,7 @@ aws amplify update-app \
 aws amplify start-deployment \
   --app-id $APP_ID \
   --branch-name main \
-  --source-url s3://finops-deployment-packages-062025/finops-ui-build.zip
+  --source-url s3://${DEPLOYMENT_BUCKET}/finops-ui-build.zip
 ```
 
 ## Setting Up Authentication

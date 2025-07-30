@@ -1,215 +1,413 @@
-# Trusted Advisor Agent
+# AWS Trusted Advisor Agent
 
-A Strands-based AWS Lambda agent that provides cost optimization recommendations from AWS Trusted Advisor. This agent can be used standalone or integrated with other FinOps agents.
+The AWS Trusted Advisor Agent is a specialized component of the FinOps Agent system that provides intelligent cost optimization recommendations using AWS Trusted Advisor APIs and AI-powered insights.
 
-## Overview
+## 🎯 **Features**
 
-The Trusted Advisor Agent specializes in retrieving and analyzing cost optimization recommendations from AWS Trusted Advisor. It provides real-time data on:
+- **Cost Optimization Recommendations**: Real-time access to AWS Trusted Advisor insights
+- **Dual API Support**: New Trusted Advisor API with legacy Support API fallback
+- **AI-Powered Analysis**: Enhanced recommendations using Amazon Bedrock
+- **Performance Insights**: Service limit monitoring and performance optimization
+- **Security Recommendations**: Security-related Trusted Advisor checks
+- **Fault Tolerance**: Comprehensive error handling and retry logic
 
-- Underutilized EC2 instances
-- Idle or unused resources
-- Reserved Instance opportunities
-- Over-provisioned resources
-- Storage optimization opportunities
-- Load balancer utilization
-
-## Features
-
-### Strands Tools Available
-
-1. **`get_trusted_advisor_recommendations()`**
-   - Retrieves all cost optimization recommendations
-   - Returns structured data with potential savings
-   - Sorts findings by estimated monthly savings
-
-2. **`get_recommendation_details(recommendation_identifier)`**
-   - Gets detailed information for a specific recommendation
-   - Includes all affected resources and metadata
-   - Provides specific optimization actions
-
-3. **`get_cost_optimization_summary()`**
-   - Provides high-level summary of optimization opportunities
-   - Categorizes findings by service type
-   - Shows top savings opportunities
-
-### Key Capabilities
-
-- **Real-time Data**: Direct integration with AWS Trusted Advisor API
-- **Exact Calculations**: No rounding or estimation of cost savings
-- **Structured Output**: JSON-formatted responses for easy integration
-- **Error Handling**: Comprehensive error handling and logging
-- **Reusable**: Can be called by other Strands agents
-
-## Project Structure
+## 🏗️ **Architecture**
 
 ```
-trusted_advisor_agent/
-├── __init__.py                    # Package initialization
-├── lambda_handler.py              # Main Lambda handler
-├── trusted_advisor_tools.py       # Strands tools implementation
-├── requirements.txt               # Python dependencies
-├── build_lambda_package.sh        # Build script
-├── trusted_advisor_cf.yaml        # CloudFormation template
-└── README.md                      # This file
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Supervisor    │    │  Trusted Advisor │    │   AWS Trusted   │
+│   Agent         │───►│  Agent           │───►│   Advisor API   │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                                │                        │
+                                ▼                        ▼
+                       ┌──────────────────┐    ┌─────────────────┐
+                       │   Amazon         │    │   Legacy        │
+                       │   Bedrock        │    │   Support API   │
+                       └──────────────────┘    └─────────────────┘
 ```
 
-## Setup and Deployment
+### Core Components
+
+- **Lambda Function**: Serverless execution with optimized performance
+- **Trusted Advisor Integration**: Direct API access to recommendations
+- **AI Enhancement**: Bedrock integration for intelligent insights
+- **Dual API Support**: New API with legacy fallback
+- **Dependencies Layer**: Shared libraries (Strands SDK, boto3)
+- **Error Handling**: Dead letter queue and comprehensive monitoring
+
+## 🚀 **Quick Deployment**
 
 ### Prerequisites
 
-- Python 3.11+
 - AWS CLI configured with appropriate permissions
-- Access to AWS Support API (Business or Enterprise support plan required)
-- Strands SDK
+- Python 3.11+ installed
+- S3 bucket for deployment artifacts
+- AWS Support plan (Business/Enterprise recommended for full functionality)
 
-### Building the Lambda Package
-
-1. Navigate to the agent directory:
-```bash
-cd trusted_advisor_agent
-```
-
-2. Run the build script:
-```bash
-./build_lambda_package.sh
-```
-
-This creates `trusted_advisor_agent_lambda.zip` ready for deployment.
-
-### Deploying to AWS
-
-1. Upload the Lambda package to S3:
-```bash
-aws s3 cp trusted_advisor_agent_lambda.zip s3://finops-deployment-packages-062025/
-```
-
-2. Deploy using CloudFormation:
-```bash
-aws cloudformation deploy \
-  --template-file trusted_advisor_cf.yaml \
-  --stack-name trusted-advisor-agent \
-  --parameter-overrides \
-    LambdaS3Key=trusted_advisor_agent_lambda.zip \
-    LambdaTimeout=300 \
-    LambdaMemorySize=512 \
-  --capabilities CAPABILITY_NAMED_IAM
-```
-
-## Usage
-
-### Direct Lambda Invocation
+### One-Command Deployment
 
 ```bash
-aws lambda invoke \
-  --function-name trusted-advisor-agent \
-  --payload '{"query": "What are my current cost optimization opportunities?"}' \
-  response.json
+./deploy.sh --bucket YOUR_DEPLOYMENT_BUCKET
 ```
 
-### Integration with Other Agents
+### Custom Deployment
 
-The Trusted Advisor Agent can be called by other Strands agents:
+```bash
+# Deploy to staging environment
+./deploy.sh --bucket my-bucket --env staging --region us-west-2
+
+# Deploy with custom configuration
+./deploy.sh --bucket my-bucket --memory 1024 --timeout 600
+
+# Build packages only
+./deploy.sh --bucket my-bucket --build-only
+```
+
+## 📋 **Configuration**
+
+### CloudFormation Parameters
+
+| Parameter | Description | Default | Range |
+|-----------|-------------|---------|-------|
+| `DeploymentBucket` | S3 bucket for artifacts | Required | 3-63 chars |
+| `Environment` | Deployment environment | `prod` | dev/staging/prod |
+| `LambdaTimeout` | Function timeout (seconds) | `300` | 30-900 |
+| `LambdaMemorySize` | Memory allocation (MB) | `512` | 128-10240 |
+| `LogRetentionDays` | Log retention period | `30` | 1-3653 |
+| `EnableLegacySupport` | Enable Support API fallback | `true` | true/false |
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `REGION` | AWS region | Auto-detected |
+| `LOG_LEVEL` | Logging level | `INFO` |
+| `ENVIRONMENT` | Deployment environment | `prod` |
+| `ENABLE_LEGACY_SUPPORT` | Legacy API fallback | `true` |
+| `POWERTOOLS_SERVICE_NAME` | Service name for observability | `trusted-advisor-agent` |
+
+## 🔧 **Usage**
+
+### Query Examples
+
+The agent responds to Trusted Advisor related queries:
 
 ```python
-from trusted_advisor_tools import get_trusted_advisor_recommendations
-
-# Get all recommendations
-recommendations = get_trusted_advisor_recommendations()
-```
-
-### Bedrock Agent Integration
-
-The agent supports Bedrock agent action groups with the following functions:
-
-- `get_trusted_advisor_recommendations`
-- `get_recommendation_details`
-- `get_cost_optimization_summary`
-
-## Response Format
-
-### Recommendations Response
-```json
+# Example invocation payload
 {
-  "summary": {
-    "totalFindings": 15,
-    "totalPotentialSavings": 1250.75,
-    "lastUpdated": "2025-06-09 23:00:00"
-  },
-  "findings": [
-    {
-      "recommendationIdentifier": "check-id",
-      "checkName": "Low Utilization Amazon EC2 Instances",
-      "status": "warning",
-      "description": "Check description...",
-      "recommendedAction": "Review and address...",
-      "resourceCount": 5,
-      "estimatedMonthlySavings": 450.25,
-      "resources": [...]
+    "query": "Show me cost optimization recommendations",
+    "context": {
+        "user_id": "user123",
+        "session_id": "session456"
     }
-  ]
 }
 ```
 
-## IAM Permissions Required
+### Supported Query Types
 
-The agent requires the following IAM permissions:
+- **Cost Optimization**: "Show me cost optimization recommendations"
+- **Performance**: "What performance improvements are available?"
+- **Security**: "Show me security recommendations"
+- **Service Limits**: "Are we approaching any service limits?"
+- **Fault Tolerance**: "Show me fault tolerance recommendations"
+- **Specific Checks**: "Show me EC2 Reserved Instance recommendations"
 
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "support:DescribeTrustedAdvisorChecks",
-        "support:DescribeTrustedAdvisorCheckResult",
-        "support:DescribeTrustedAdvisorCheckSummaries",
-        "support:RefreshTrustedAdvisorCheck"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
+## 🏗️ **Building and Deployment**
+
+### Package Build Process
+
+```bash
+# Build with defaults
+./build_lambda_package.sh
+
+# Build specific components
+./build_lambda_package.sh deps    # Dependencies only
+./build_lambda_package.sh app     # Application only
+./build_lambda_package.sh clean   # Clean build directory
 ```
 
-## Limitations
+### Manual CloudFormation Deployment
 
-- Requires AWS Business or Enterprise support plan
-- Support API is only available in us-east-1 region
-- Rate limits apply to Trusted Advisor API calls
-- Some checks may not provide exact savings calculations
+```bash
+# Upload packages to S3
+aws s3 cp dist/app.zip s3://YOUR_BUCKET/trusted-advisor-agent/app.zip
+aws s3 cp dist/dependencies.zip s3://YOUR_BUCKET/trusted-advisor-agent/dependencies.zip
 
-## Integration with FinOps Agent
+# Deploy stack
+aws cloudformation deploy \
+  --template-file cloudformation.yaml \
+  --stack-name finops-trusted-advisor-agent-prod \
+  --parameter-overrides \
+    DeploymentBucket=YOUR_BUCKET \
+    Environment=prod \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-east-1
+```
 
-This agent is designed to be integrated with the main FinOps agent system. It can be called as a tool to provide Trusted Advisor data alongside Cost Explorer and other AWS cost management services.
+### Update Deployment
 
-## Troubleshooting
+```bash
+# Update packages and redeploy
+./build_lambda_package.sh
+./deploy.sh --bucket YOUR_BUCKET --deploy-only
+```
 
-### Common Issues
+## 📊 **Monitoring and Observability**
 
-1. **Access Denied**: Ensure AWS Support plan includes Trusted Advisor API access
-2. **Region Issues**: Support API only works in us-east-1
-3. **Rate Limiting**: Implement retry logic for API calls
-4. **Missing Data**: Some checks may not have cost savings data available
+### CloudWatch Metrics
+
+- **Invocations**: Function execution count
+- **Duration**: Execution time and percentiles
+- **Errors**: Error rate and count
+- **Throttles**: Concurrency throttling events
+- **Custom Metrics**: Trusted Advisor API calls and response times
+
+### CloudWatch Alarms
+
+- **Error Rate**: Triggers when error rate exceeds 5 errors in 10 minutes
+- **Duration**: Monitors execution time approaching timeout
+- **API Failures**: Alerts on Trusted Advisor API failures
 
 ### Logging
 
-The agent uses structured logging. Check CloudWatch logs for detailed execution information:
-
 ```bash
-aws logs tail /aws/lambda/trusted-advisor-agent --follow
+# View real-time logs
+aws logs tail /aws/lambda/finops-trusted-advisor-agent-prod --follow
+
+# Search for errors
+aws logs filter-log-events \
+  --log-group-name /aws/lambda/finops-trusted-advisor-agent-prod \
+  --filter-pattern "ERROR"
+
+# Search for API calls
+aws logs filter-log-events \
+  --log-group-name /aws/lambda/finops-trusted-advisor-agent-prod \
+  --filter-pattern "TrustedAdvisor API"
 ```
 
-## Contributing
+### Custom Metrics
 
-When modifying this agent:
+The agent publishes custom metrics to CloudWatch:
 
-1. Follow Strands SDK patterns for tool definitions
-2. Maintain exact cost calculations without rounding
-3. Preserve error handling and logging
-4. Update tests and documentation
-5. Follow the project's coding standards
+- `TrustedAdvisorAPICalls`: Number of API calls made
+- `RecommendationsRetrieved`: Number of recommendations fetched
+- `APIResponseTime`: Response time for Trusted Advisor APIs
+- `LegacyAPIFallbacks`: Number of fallbacks to legacy Support API
 
-## License
+## 🔒 **Security**
 
-This project is part of the FinOps Agent system and follows the same licensing terms.
+### IAM Permissions
+
+The agent requires these AWS permissions:
+
+#### New Trusted Advisor API (Recommended)
+- `trustedadvisor:ListRecommendations`
+- `trustedadvisor:GetRecommendation`
+- `trustedadvisor:GetOrganizationRecommendation`
+- `trustedadvisor:ListChecks`
+- `trustedadvisor:GetCheck`
+- `trustedadvisor:GetCheckResult`
+
+#### Legacy Support API (Fallback)
+- `support:DescribeTrustedAdvisorChecks`
+- `support:DescribeTrustedAdvisorCheckResult`
+- `support:DescribeTrustedAdvisorCheckSummaries`
+- `support:RefreshTrustedAdvisorCheck`
+
+#### Additional Permissions
+- **Bedrock**: Access to foundation models for AI insights
+- **CloudWatch**: Metrics and logging
+- **Lambda**: Function execution
+
+### Security Features
+
+- **No Hardcoded Credentials**: Uses IAM roles and environment variables
+- **Least Privilege Access**: Minimal required permissions
+- **API Fallback**: Graceful degradation when APIs are unavailable
+- **Input Validation**: Comprehensive request validation
+- **Audit Logging**: Complete request/response logging
+
+### AWS Support Plan Requirements
+
+| Feature | Basic | Developer | Business | Enterprise |
+|---------|-------|-----------|----------|------------|
+| New Trusted Advisor API | ✅ | ✅ | ✅ | ✅ |
+| Legacy Support API | ❌ | ❌ | ✅ | ✅ |
+| Full Recommendations | ❌ | ❌ | ✅ | ✅ |
+| Programmatic Access | ❌ | ❌ | ✅ | ✅ |
+
+## 🧪 **Testing**
+
+### Unit Tests
+
+```bash
+# Run unit tests (when available)
+python -m pytest tests/ -v
+```
+
+### Integration Testing
+
+```bash
+# Test with real AWS services
+aws lambda invoke \
+  --function-name finops-trusted-advisor-agent-prod \
+  --payload '{"query": "Show me cost optimization recommendations"}' \
+  response.json
+
+cat response.json
+```
+
+### API Access Testing
+
+```bash
+# Test new Trusted Advisor API
+aws trustedadvisor list-checks --language en
+
+# Test legacy Support API (requires Business/Enterprise)
+aws support describe-trusted-advisor-checks --language en
+```
+
+### Local Testing
+
+```bash
+# Test locally with SAM (if available)
+sam local invoke TrustedAdvisorAgentFunction \
+  --event test-event.json
+```
+
+## 🚨 **Troubleshooting**
+
+### Common Issues
+
+1. **Permission Errors**
+   ```bash
+   # Check IAM role permissions
+   aws iam get-role-policy \
+     --role-name finops-trusted-advisor-agent-role-prod \
+     --policy-name TrustedAdvisorAccess
+   ```
+
+2. **Support Plan Issues**
+   ```bash
+   # Check support plan level
+   aws support describe-severity-levels
+   
+   # If this fails, you may need Business/Enterprise support
+   ```
+
+3. **API Access Issues**
+   ```bash
+   # Test new API access
+   aws trustedadvisor list-checks --language en
+   
+   # Test legacy API access
+   aws support describe-trusted-advisor-checks --language en
+   ```
+
+4. **Timeout Issues**
+   - Increase `LambdaTimeout` parameter
+   - Check Trusted Advisor API response times
+   - Monitor CloudWatch metrics
+
+### Debug Mode
+
+Enable debug logging:
+
+```bash
+aws lambda update-function-configuration \
+  --function-name finops-trusted-advisor-agent-prod \
+  --environment Variables='{LOG_LEVEL=DEBUG}'
+```
+
+### Performance Optimization
+
+- **Memory Allocation**: Increase memory for faster API processing
+- **Timeout Configuration**: Adjust based on API response times
+- **Caching**: Implement response caching for frequently accessed data
+- **Batch Processing**: Process multiple recommendations efficiently
+
+## 📚 **API Reference**
+
+### Input Format
+
+```json
+{
+  "query": "string",
+  "context": {
+    "user_id": "string",
+    "session_id": "string",
+    "preferences": {}
+  },
+  "options": {
+    "include_details": true,
+    "check_types": ["cost_optimizing", "performance", "security"],
+    "language": "en"
+  }
+}
+```
+
+### Output Format
+
+```json
+{
+  "response": "string",
+  "data": {
+    "recommendations": [...],
+    "check_results": [...],
+    "api_used": "new|legacy"
+  },
+  "metadata": {
+    "execution_time": 1.23,
+    "recommendations_count": 5,
+    "api_calls_made": 3
+  }
+}
+```
+
+### Trusted Advisor Check Categories
+
+- **Cost Optimizing**: EC2 Reserved Instances, Idle Load Balancers, etc.
+- **Performance**: High Utilization EC2 Instances, CloudFront optimizations
+- **Security**: Security Groups, IAM Use, Root Access Key
+- **Fault Tolerance**: EBS Snapshots, Multi-AZ RDS, Route 53 configurations
+- **Service Limits**: Service usage approaching limits
+
+## 🔄 **Updates and Maintenance**
+
+### Updating Dependencies
+
+1. Update `requirements.txt`
+2. Rebuild packages: `./build_lambda_package.sh`
+3. Redeploy: `./deploy.sh --bucket YOUR_BUCKET --deploy-only`
+
+### Scaling Configuration
+
+```bash
+# Update memory and timeout
+aws cloudformation update-stack \
+  --stack-name finops-trusted-advisor-agent-prod \
+  --use-previous-template \
+  --parameters \
+    ParameterKey=LambdaMemorySize,ParameterValue=1024 \
+    ParameterKey=LambdaTimeout,ParameterValue=600
+```
+
+### API Migration
+
+The agent supports both new and legacy Trusted Advisor APIs:
+
+- **New API**: Recommended for all new deployments
+- **Legacy API**: Automatic fallback for compatibility
+- **Migration**: Gradual transition with feature flags
+
+## 📄 **License**
+
+This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details.
+
+## 🤝 **Contributing**
+
+Please read [CONTRIBUTING.md](../CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+
+---
+
+**Part of the [FinOps Agent](../README.md) project**

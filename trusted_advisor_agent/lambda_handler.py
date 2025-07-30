@@ -310,10 +310,10 @@ def create_fresh_agent():
     """Create a fresh agent instance to avoid state corruption."""
     from strands.models.bedrock import BedrockModel
     
-    # Configure optimized Bedrock model for us-east-1 region
+    # Configure optimized Bedrock model with cross-region inference
     trusted_advisor_model = BedrockModel(
         region_name="us-east-1",  # Same region as Lambda for optimal performance
-        model_id="anthropic.claude-3-haiku-20240307-v1:0"  # Fast and cost-effective model
+        model_id=os.environ.get('STRANDS_MODEL_ID', 'us.anthropic.claude-3-5-haiku-20241022-v1:0')  # Cross-region inference profile
     )
 
     # Create agent without session to avoid state management issues

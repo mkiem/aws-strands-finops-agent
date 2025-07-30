@@ -191,7 +191,7 @@ const handleMessage = (message) => {
 
 ### Prerequisites
 - AWS CLI configured with appropriate permissions
-- S3 bucket for deployment packages: `finops-deployment-packages-062025`
+- S3 bucket for deployment packages: `${DEPLOYMENT_BUCKET}`
 - Existing FinOps agents: `aws-cost-forecast-agent`, `trusted-advisor-agent-trusted-advisor-agent`
 
 ### Step 1: Build Lambda Packages
@@ -202,16 +202,16 @@ cd websocket_api
 
 ### Step 2: Upload to S3
 ```bash
-aws s3 cp build/websocket-connection-manager.zip s3://finops-deployment-packages-062025/
-aws s3 cp build/websocket-message-handler.zip s3://finops-deployment-packages-062025/
-aws s3 cp build/websocket-background-processor.zip s3://finops-deployment-packages-062025/
+aws s3 cp build/websocket-connection-manager.zip s3://${DEPLOYMENT_BUCKET}/
+aws s3 cp build/websocket-message-handler.zip s3://${DEPLOYMENT_BUCKET}/
+aws s3 cp build/websocket-background-processor.zip s3://${DEPLOYMENT_BUCKET}/
 ```
 
 ### Step 3: Deploy CloudFormation Stack
 ```bash
 aws cloudformation deploy \
   --template-file cloudformation/finops-websocket-api-fixed.yaml \
-  --parameter-overrides ProjectName=finops-websocket LambdaS3Bucket=finops-deployment-packages-062025 \
+  --parameter-overrides ProjectName=finops-websocket LambdaS3Bucket=${DEPLOYMENT_BUCKET} \
   --capabilities CAPABILITY_NAMED_IAM \
   --stack-name finops-websocket-api
 ```
@@ -220,17 +220,17 @@ aws cloudformation deploy \
 ```bash
 aws lambda update-function-code \
   --function-name finops-websocket-connection-manager \
-  --s3-bucket finops-deployment-packages-062025 \
+  --s3-bucket ${DEPLOYMENT_BUCKET} \
   --s3-key websocket-connection-manager.zip
 
 aws lambda update-function-code \
   --function-name finops-websocket-message-handler \
-  --s3-bucket finops-deployment-packages-062025 \
+  --s3-bucket ${DEPLOYMENT_BUCKET} \
   --s3-key websocket-message-handler.zip
 
 aws lambda update-function-code \
   --function-name finops-websocket-background-processor \
-  --s3-bucket finops-deployment-packages-062025 \
+  --s3-bucket ${DEPLOYMENT_BUCKET} \
   --s3-key websocket-background-processor.zip
 ```
 

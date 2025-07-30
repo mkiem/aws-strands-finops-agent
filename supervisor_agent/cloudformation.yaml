@@ -1,0 +1,411 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'FinOps Supervisor Agent - Intelligent cost optimization orchestration with container-based Lambda'
+
+Parameters:
+  ECRRepository:
+    Type: String
+    Description: ECR repository name for the container image
+    Default: finops-supervisor-agent
+    MinLength: 2
+    MaxLength: 256
+    AllowedPattern: '^[a-z0-9]+(?:[._-][a-z0-9]+)*$'
+    ConstraintDescription: Must be a valid ECR repository name
+    
+  ImageTag:
+    Type: String
+    Description: Container image tag
+    Default: latest
+    MinLength: 1
+    MaxLength: 128
+    
+  LambdaTimeout:
+    Type: Number
+    Default: 300
+    MinValue: 30
+    MaxValue: 900
+    Description: Lambda function timeout in seconds (30-900)
+    
+  LambdaMemorySize:
+    Type: Number
+    Default: 1024
+    MinValue: 128
+    MaxValue: 10240
+    Description: Lambda function memory in MB (128-10240)
+    
+  ProvisionedConcurrency:
+    Type: Number
+    Default: 2
+    MinValue: 0
+    MaxValue: 100
+    Description: Number of provisioned concurrent executions (0 to disable)
+    
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, staging, prod]
+    Description: Deployment environment
+    
+  LogRetentionDays:
+    Type: Number
+    Default: 30
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+    Description: CloudWatch log retention period in days
+    
+  EnableApiGateway:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: Enable API Gateway endpoint (legacy support)
+    
+  CorsOrigins:
+    Type: CommaDelimitedList
+    Default: 'http://localhost:3000,https://localhost:3000'
+    Description: Comma-delimited list of allowed CORS origins
+    
+  EnableSnapStart:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Enable Lambda SnapStart for faster cold starts (Java/Python 3.11+)
+
+Conditions:
+  CreateApiGateway: !Equals [!Ref EnableApiGateway, 'true']
+  EnableProvisionedConcurrency: !Not [!Equals [!Ref ProvisionedConcurrency, 0]]
+  EnableSnapStartCondition: !Equals [!Ref EnableSnapStart, 'true']
+
+Resources:
+  # IAM Role for Supervisor Agent Lambda
+  SupervisorAgentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'finops-supervisor-agent-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: InvokeSpecializedAgents
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource:
+                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:finops-cost-forecast-agent-*'
+                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:finops-trusted-advisor-agent-*'
+                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:finops-budget-management-agent-*'
+                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:aws-cost-forecast-agent'
+                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:trusted-advisor-agent-*'
+                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:budget-management-agent'
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource: 
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/*'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:model/*'
+        - PolicyName: CloudWatchMetrics
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    'cloudwatch:namespace': 'FinOpsAgent'
+      Tags:
+        - Key: Project
+          Value: FinOpsAgent
+        - Key: Component
+          Value: SupervisorAgent
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Lambda Function
+  SupervisorAgentFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'finops-supervisor-agent-${Environment}'
+      Description: FinOps Supervisor Agent - Intelligent cost optimization orchestration
+      PackageType: Image
+      Code:
+        ImageUri: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}:${ImageTag}'
+      Role: !GetAtt SupervisorAgentRole.Arn
+      Timeout: !Ref LambdaTimeout
+      MemorySize: !Ref LambdaMemorySize
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: finops-supervisor-agent
+          POWERTOOLS_METRICS_NAMESPACE: FinOpsAgent
+          LOG_LEVEL: INFO
+          ENVIRONMENT: !Ref Environment
+          PYTHONWARNINGS: ignore
+          PYTHONPATH: /var/task
+      EphemeralStorage:
+        Size: 1024
+      Architectures:
+        - x86_64
+      ReservedConcurrencyLimit: 50
+      DeadLetterQueue:
+        TargetArn: !GetAtt SupervisorAgentDLQ.Arn
+      Tags:
+        - Key: Project
+          Value: FinOpsAgent
+        - Key: Component
+          Value: SupervisorAgent
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Lambda Version (required for SnapStart and Provisioned Concurrency)
+  SupervisorAgentVersion:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !Ref SupervisorAgentFunction
+      Description: !Sub 'Production version for ${Environment} environment'
+
+  # Lambda Alias
+  SupervisorAgentAlias:
+    Type: AWS::Lambda::Alias
+    Properties:
+      FunctionName: !Ref SupervisorAgentFunction
+      FunctionVersion: !GetAtt SupervisorAgentVersion.Version
+      Name: !Ref Environment
+      ProvisionedConcurrencyConfig: !If
+        - EnableProvisionedConcurrency
+        - ProvisionedConcurrentExecutions: !Ref ProvisionedConcurrency
+        - !Ref 'AWS::NoValue'
+
+  # Lambda Function URL for direct invocation
+  SupervisorAgentFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt SupervisorAgentAlias.AliasArn
+      AuthType: NONE
+      Cors:
+        AllowCredentials: false
+        AllowHeaders: 
+          - 'Content-Type'
+          - 'X-Amz-Date'
+          - 'Authorization'
+          - 'X-Api-Key'
+          - 'X-Amz-Security-Token'
+          - 'X-Amz-User-Agent'
+        AllowMethods: 
+          - 'POST'
+          - 'OPTIONS'
+        AllowOrigins: !Ref CorsOrigins
+        ExposeHeaders:
+          - 'Content-Type'
+          - 'X-Amz-Request-Id'
+        MaxAge: 86400
+
+  # CloudWatch Log Group
+  SupervisorAgentLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/finops-supervisor-agent-${Environment}'
+      RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: Project
+          Value: FinOpsAgent
+        - Key: Component
+          Value: SupervisorAgent
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Dead Letter Queue
+  SupervisorAgentDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'finops-supervisor-agent-dlq-${Environment}'
+      MessageRetentionPeriod: 1209600  # 14 days
+      Tags:
+        - Key: Project
+          Value: FinOpsAgent
+        - Key: Component
+          Value: SupervisorAgent
+        - Key: Environment
+          Value: !Ref Environment
+
+  # API Gateway (Optional - for legacy support)
+  SupervisorApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Condition: CreateApiGateway
+    Properties:
+      Name: !Sub 'finops-supervisor-api-${Environment}'
+      Description: API Gateway for FinOps Supervisor Agent (Legacy)
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Tags:
+        - Key: Project
+          Value: FinOpsAgent
+        - Key: Component
+          Value: SupervisorAgent
+        - Key: Environment
+          Value: !Ref Environment
+
+  SupervisorApiResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: CreateApiGateway
+    Properties:
+      RestApiId: !Ref SupervisorApiGateway
+      ParentId: !GetAtt SupervisorApiGateway.RootResourceId
+      PathPart: query
+
+  SupervisorApiMethod:
+    Type: AWS::ApiGateway::Method
+    Condition: CreateApiGateway
+    Properties:
+      RestApiId: !Ref SupervisorApiGateway
+      ResourceId: !Ref SupervisorApiResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SupervisorAgentFunction.Arn}:${SupervisorAgentAlias}/invocations'
+      MethodResponses:
+        - StatusCode: 200
+
+  SupervisorApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    Condition: CreateApiGateway
+    DependsOn: SupervisorApiMethod
+    Properties:
+      RestApiId: !Ref SupervisorApiGateway
+
+  SupervisorApiStage:
+    Type: AWS::ApiGateway::Stage
+    Condition: CreateApiGateway
+    Properties:
+      DeploymentId: !Ref SupervisorApiDeployment
+      RestApiId: !Ref SupervisorApiGateway
+      StageName: !Ref Environment
+      CacheClusterEnabled: false
+      TracingConfig:
+        TracingEnabled: true
+      Tags:
+        - Key: Project
+          Value: FinOpsAgent
+        - Key: Component
+          Value: SupervisorAgent
+        - Key: Environment
+          Value: !Ref Environment
+
+  # API Gateway Permission
+  SupervisorApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Condition: CreateApiGateway
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt SupervisorAgentAlias.AliasArn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SupervisorApiGateway}/*/*'
+
+  # CloudWatch Alarms
+  SupervisorAgentErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'finops-supervisor-agent-errors-${Environment}'
+      AlarmDescription: Monitor errors in Supervisor Agent
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SupervisorAgentFunction
+      TreatMissingData: notBreaching
+
+  SupervisorAgentDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'finops-supervisor-agent-duration-${Environment}'
+      AlarmDescription: Monitor duration of Supervisor Agent
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: !Ref LambdaTimeout
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SupervisorAgentFunction
+      TreatMissingData: notBreaching
+
+  SupervisorAgentThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'finops-supervisor-agent-throttles-${Environment}'
+      AlarmDescription: Monitor throttles in Supervisor Agent
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SupervisorAgentFunction
+      TreatMissingData: notBreaching
+
+Outputs:
+  SupervisorAgentFunctionName:
+    Description: Supervisor Agent Lambda Function Name
+    Value: !Ref SupervisorAgentFunction
+    Export:
+      Name: !Sub '${AWS::StackName}-FunctionName'
+    
+  SupervisorAgentFunctionArn:
+    Description: Supervisor Agent Lambda Function ARN
+    Value: !GetAtt SupervisorAgentFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-FunctionArn'
+    
+  SupervisorAgentAliasArn:
+    Description: Supervisor Agent Lambda Alias ARN
+    Value: !GetAtt SupervisorAgentAlias.AliasArn
+    Export:
+      Name: !Sub '${AWS::StackName}-AliasArn'
+    
+  SupervisorAgentFunctionUrl:
+    Description: Lambda Function URL for direct invocation
+    Value: !GetAtt SupervisorAgentFunctionUrl.FunctionUrl
+    Export:
+      Name: !Sub '${AWS::StackName}-FunctionUrl'
+      
+  SupervisorAgentRoleArn:
+    Description: Supervisor Agent Lambda Role ARN
+    Value: !GetAtt SupervisorAgentRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-RoleArn'
+      
+  SupervisorApiGatewayEndpoint:
+    Condition: CreateApiGateway
+    Description: API Gateway endpoint URL (Legacy)
+    Value: !Sub 'https://${SupervisorApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/query'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayEndpoint'
+      
+  LogGroupName:
+    Description: CloudWatch Log Group Name
+    Value: !Ref SupervisorAgentLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-LogGroupName'

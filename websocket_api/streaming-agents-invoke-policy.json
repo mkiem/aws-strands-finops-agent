@@ -8,14 +8,14 @@
                 "lambda:InvokeAsync"
             ],
             "Resource": [
-                "arn:aws:lambda:us-east-1:837882009522:function:AWS-FinOps-Agent",
-                "arn:aws:lambda:us-east-1:837882009522:function:AWS-FinOps-Agent:*",
-                "arn:aws:lambda:us-east-1:837882009522:function:aws-cost-forecast-agent",
-                "arn:aws:lambda:us-east-1:837882009522:function:aws-cost-forecast-agent:*",
-                "arn:aws:lambda:us-east-1:837882009522:function:trusted-advisor-agent-trusted-advisor-agent",
-                "arn:aws:lambda:us-east-1:837882009522:function:trusted-advisor-agent-trusted-advisor-agent:*",
-                "arn:aws:lambda:us-east-1:837882009522:function:budget-management-agent",
-                "arn:aws:lambda:us-east-1:837882009522:function:budget-management-agent:*"
+                "arn:aws:lambda:us-east-1:${AWS_ACCOUNT_ID}:function:AWS-FinOps-Agent",
+                "arn:aws:lambda:us-east-1:${AWS_ACCOUNT_ID}:function:AWS-FinOps-Agent:*",
+                "arn:aws:lambda:us-east-1:${AWS_ACCOUNT_ID}:function:aws-cost-forecast-agent",
+                "arn:aws:lambda:us-east-1:${AWS_ACCOUNT_ID}:function:aws-cost-forecast-agent:*",
+                "arn:aws:lambda:us-east-1:${AWS_ACCOUNT_ID}:function:trusted-advisor-agent-trusted-advisor-agent",
+                "arn:aws:lambda:us-east-1:${AWS_ACCOUNT_ID}:function:trusted-advisor-agent-trusted-advisor-agent:*",
+                "arn:aws:lambda:us-east-1:${AWS_ACCOUNT_ID}:function:budget-management-agent",
+                "arn:aws:lambda:us-east-1:${AWS_ACCOUNT_ID}:function:budget-management-agent:*"
             ]
         }
     ]

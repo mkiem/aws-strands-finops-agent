@@ -1,6 +1,0 @@
-{
-  "query": "Provide comprehensive analysis of my AWS costs and optimization opportunities",
-  "requestContext": {
-    "connectionId": "test-connection-123"
-  }
-}

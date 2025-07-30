@@ -133,122 +133,14 @@ const FinOpsResponse = ({ responseData }) => {
     }
   };
 
-  // Extract cost information for the cost summary card
-  const extractCostInfo = () => {
-    const markdownContent = getMarkdownContent();
-    
-    // Default values
-    let costInfo = {
-      serviceName: "AWS",
-      costAmount: "0.00",
-      timePeriod: ""
-    };
-    
-    // Safety check for markdownContent
-    if (!markdownContent || typeof markdownContent !== 'string') {
-      return costInfo;
-    }
-    
-    // Try to extract service name from first heading
-    const serviceMatch = markdownContent.match(/# (.*?) Cost/);
-    if (serviceMatch) {
-      costInfo.serviceName = serviceMatch[1];
-    }
-    
-    // Enhanced cost extraction logic
-    const extractCostAmount = () => {
-      // Priority 1: Look for "Total" amounts (most important)
-      const totalPatterns = [
-        /Total.*?\$([0-9,]+\.?\d*)/gi,
-        /Total.*?\$([0-9,]+)/gi,
-        /\$([0-9,]+\.?\d*).*?total/gi,
-        /Grand Total.*?\$([0-9,]+\.?\d*)/gi,
-        /Overall.*?\$([0-9,]+\.?\d*)/gi
-      ];
-      
-      for (const pattern of totalPatterns) {
-        const matches = [...markdownContent.matchAll(pattern)];
-        if (matches.length > 0) {
-          // Get the largest total amount found
-          const amounts = matches.map(match => parseFloat(match[1].replace(/,/g, '')));
-          const maxAmount = Math.max(...amounts);
-          return maxAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        }
-      }
-      
-      // Priority 2: Look for summary or aggregate amounts
-      const summaryPatterns = [
-        /Summary.*?\$([0-9,]+\.?\d*)/gi,
-        /\$([0-9,]+\.?\d*).*?summary/gi,
-        /Aggregate.*?\$([0-9,]+\.?\d*)/gi,
-        /Combined.*?\$([0-9,]+\.?\d*)/gi
-      ];
-      
-      for (const pattern of summaryPatterns) {
-        const matches = [...markdownContent.matchAll(pattern)];
-        if (matches.length > 0) {
-          const amounts = matches.map(match => parseFloat(match[1].replace(/,/g, '')));
-          const maxAmount = Math.max(...amounts);
-          return maxAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        }
-      }
-      
-      // Priority 3: Look for the largest dollar amount (likely the total)
-      const allAmountPattern = /\$([0-9,]+\.?\d*)/g;
-      const allMatches = [...markdownContent.matchAll(allAmountPattern)];
-      
-      if (allMatches.length > 0) {
-        // Parse all amounts and find the largest (most likely to be the total)
-        const amounts = allMatches.map(match => {
-          const cleanAmount = match[1].replace(/,/g, '');
-          return parseFloat(cleanAmount);
-        }).filter(amount => !isNaN(amount));
-        
-        if (amounts.length > 0) {
-          const maxAmount = Math.max(...amounts);
-          // Only use if it's a reasonable amount (> $1)
-          if (maxAmount > 1) {
-            return maxAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-          }
-        }
-      }
-      
-      // Priority 4: Fallback to original simple pattern
-      const simpleMatch = markdownContent.match(/\$(\d+\.?\d*)/);
-      if (simpleMatch) {
-        const amount = parseFloat(simpleMatch[1]);
-        return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      }
-      
-      return "0.00";
-    };
-    
-    costInfo.costAmount = extractCostAmount();
-    
-    // Try to extract time period
-    const timeMatch = markdownContent.match(/Time Period\*\*: (.*?)(\n|$)/);
-    if (timeMatch) {
-      costInfo.timePeriod = timeMatch[1];
-    }
-    
-    return costInfo;
-  };
-
-  // Get the markdown content and cost info
+  // Get the markdown content
   const markdownContent = getMarkdownContent();
-  const costInfo = extractCostInfo();
 
   return (
     <div className="finops-response-container">
       <div className="query-section">
         <h3>Your Question:</h3>
         <p>{query}</p>
-      </div>
-      
-      <div className="cost-summary-card">
-        <div className="service-name">{costInfo.serviceName} Cost Summary</div>
-        <div className="cost-amount">${costInfo.costAmount}</div>
-        {costInfo.timePeriod && <div className="time-period">{costInfo.timePeriod}</div>}
       </div>
       
       <div className="response-section">

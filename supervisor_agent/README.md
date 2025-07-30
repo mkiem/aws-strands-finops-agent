@@ -1,433 +1,442 @@
-# AWS FinOps Supervisor Agent - Enhanced with Intelligent Synthesis
+# FinOps Supervisor Agent
 
-The AWS FinOps Supervisor Agent is the central orchestrator for comprehensive AWS financial operations analysis. It coordinates between specialized FinOps agents to provide unified, actionable financial insights with **intelligent synthesis capabilities**.
+The FinOps Supervisor Agent is the central orchestration component of the FinOps Agent system. It provides intelligent query routing, agent coordination, and response synthesis using advanced AI capabilities and the Strands SDK.
 
-## 🚀 Enhanced Features
+## 🎯 **Features**
 
-### **Latency-Optimized Routing**
-- **Single Agent (Fast Path)**: Direct routing with minimal overhead (~2-5s total)
-- **2 Agents (Smart Decision)**: Chooses between aggregation (~3-6s) or synthesis (~4-8s) based on query intent
-- **3+ Agents (Synthesis Path)**: Always uses intelligent synthesis (~5-10s total)
+- **Intelligent Query Routing**: AI-powered routing to specialized agents
+- **Fast-Path Processing**: Sub-millisecond routing for 70% of queries
+- **Response Synthesis**: Combines responses from multiple agents
+- **Real-time Communication**: WebSocket and HTTP support
+- **Container-based Deployment**: Optimized Lambda container image
+- **Provisioned Concurrency**: Reduced cold start latency
+- **Multi-Agent Orchestration**: Coordinates cost, advisor, and budget agents
 
-### **Intelligent Synthesis**
-- **FinOps Advisor Persona**: 15+ years of cloud financial operations expertise
-- **Strategic Analysis**: Cross-agent pattern recognition and prioritization
-- **Business-Focused Output**: Executive summaries, action plans, risk assessments
-- **Implementation Roadmaps**: 30/90/long-term strategic timelines
+## 🏗️ **Architecture**
 
-### **Scalable Architecture**
-- **Dynamic Agent Support**: Works with any number of current and future agents
-- **Flexible Response Handling**: Adapts to different agent response formats
-- **Graceful Error Handling**: Fallback to aggregation if synthesis fails
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Frontend      │    │  Supervisor      │    │  Specialized    │
+│   Application   │───►│  Agent           │───►│  Agents         │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                                │                        │
+                                ▼                        ▼
+                       ┌──────────────────┐    ┌─────────────────┐
+                       │   Amazon         │    │  AWS APIs       │
+                       │   Bedrock        │    │  (Cost Explorer,│
+                       └──────────────────┘    │  Trusted Advisor)│
+                                               └─────────────────┘
+```
 
-## Architecture
+### Core Components
 
-The enhanced supervisor agent orchestrates interactions between:
+- **Lambda Function**: Container-based serverless execution
+- **Query Router**: Intelligent routing logic with LLM integration
+- **Agent Orchestrator**: Manages communication with specialized agents
+- **Response Synthesizer**: Combines and formats responses
+- **Function URL**: Direct HTTPS endpoint for real-time communication
+- **API Gateway**: Optional legacy REST API support
 
-1. **AWS Cost Forecast Agent** (`aws-cost-forecast-agent`): Provides detailed cost analysis, trends, and forecasting
-2. **Trusted Advisor Agent** (`trusted-advisor-agent-trusted-advisor-agent`): Delivers cost optimization recommendations and savings opportunities
-3. **Budget Management Agent** (`budget-management-agent`): Provides budget planning and cost control recommendations
-
-## Enhanced Features
-
-- **Intelligent Query Routing**: LLM-based routing with synthesis recommendations
-- **Latency-Optimized Synthesis**: Smart decision between aggregation and synthesis
-- **Strategic Response Generation**: FinOps advisor persona for business-focused insights
-- **Comprehensive Analysis**: Unified FinOps analysis with cross-agent intelligence
-- **Error Handling**: Graceful fallback and partial results
-- **Consistent Formatting**: Maintains consistent monetary formatting ($XX.XX)
-- **WebSocket Streaming**: Real-time updates with synthesis progress
-
-## Query Routing Logic
-
-### **Single Agent Queries (Fast Path)**
-- **Cost analysis queries** → AWS Cost Forecast Agent
-- **Optimization queries** → Trusted Advisor Agent  
-- **Budget queries** → Budget Management Agent
-
-### **Multi-Agent Queries (Smart Routing)**
-- **Simple aggregation**: "Show me costs and optimization recommendations"
-- **Intelligent synthesis**: "Which optimization recommendations would save the most money?"
-- **Comprehensive analysis**: "Create a complete FinOps strategy"
-
-### **Synthesis Decision Matrix**
-
-| Query Type | Example | Agents | Synthesis | Latency |
-|------------|---------|---------|-----------|---------|
-| **Single Domain** | "What are my AWS costs?" | 1 | No | ~2-5s |
-| **Simple Multi-Domain** | "Show me costs and optimization recommendations" | 2 | No | ~3-6s |
-| **Strategic Multi-Domain** | "Which recommendations would save the most money?" | 2 | Yes | ~4-8s |
-| **Comprehensive** | "Create a complete FinOps strategy" | 3+ | Yes | ~5-10s |
-
-## Enhanced Tools Available
-
-### `enhanced_supervisor_agent(query: str, connection_id: str = None)`
-Main entry point with intelligent routing and synthesis capabilities.
-
-### `invoke_cost_forecast_agent(query: str)`
-Invokes the AWS Cost Forecast Agent for detailed cost analysis.
-
-### `invoke_trusted_advisor_agent(query: str)`
-Invokes the Trusted Advisor Agent for cost optimization recommendations.
-
-### `invoke_budget_management_agent(query: str)`
-Invokes the Budget Management Agent for budget planning and controls.
-
-### `synthesize_responses(query: str, agent_responses: Dict, routing_context: Dict)`
-Performs intelligent synthesis using FinOps advisor persona.
-
-## Deployment
+## 🚀 **Quick Deployment**
 
 ### Prerequisites
 
-- Python 3.11+
-- Docker (minimum version 25.0.0)
 - AWS CLI configured with appropriate permissions
-- Access to invoke other Lambda functions:
-  - `aws-cost-forecast-agent`
-  - `trusted-advisor-agent-trusted-advisor-agent`
-  - `budget-management-agent`
+- Docker installed and running
+- ECR repository access
 
-### Container-Based Deployment
-
-The enhanced supervisor agent uses container-based Lambda deployment to overcome the 250MB package size limit.
-
-#### Building and Deploying
-
-1. Navigate to the supervisor_agent directory:
-```bash
-cd supervisor_agent
-```
-
-2. Make the build script executable and run it:
-```bash
-chmod +x build_lambda_package.sh
-./build_lambda_package.sh
-```
-
-This will:
-- Build a Docker container image with all enhanced dependencies
-- Push the image to Amazon ECR repository: `aws-finops-agent`
-- Include intelligent synthesis capabilities
-
-3. Deploy using CloudFormation or update existing function:
-```bash
-# Option 1: CloudFormation (new deployment)
-aws cloudformation deploy \
-  --template-file aws_finops_agent_cf.yaml \
-  --stack-name aws-finops-supervisor-agent \
-  --parameter-overrides \
-    LambdaTimeout=60 \
-    LambdaMemorySize=512 \
-  --capabilities CAPABILITY_NAMED_IAM
-
-# Option 2: Update existing function
-aws lambda update-function-code \
-  --function-name AWS-FinOps-Agent \
-  --image-uri ACCOUNT.dkr.ecr.REGION.amazonaws.com/aws-finops-agent:latest
-```
-
-#### Enhanced Container Image Details
-
-- **Base Image**: `public.ecr.aws/lambda/python:3.11`
-- **Size Limit**: Up to 10GB (vs 250MB for zip packages)
-- **ECR Repository**: `aws-finops-agent`
-- **Dependencies**: Strands SDK + Enhanced synthesis components
-- **Components**: 
-  - `lambda_handler.py` - Enhanced handler with synthesis
-  - `llm_router_simple.py` - Enhanced router with synthesis decisions
-  - `intelligent_finops_supervisor.py` - Core synthesis engine
-
-## Usage
-
-### API Gateway Endpoint
-
-After deployment, the enhanced supervisor agent is accessible via API Gateway:
+### One-Command Deployment
 
 ```bash
-curl -X POST \
-  https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/prod/query \
-  -H 'Content-Type: application/json' \
-  -d '{"query": "Which optimization recommendations would have the biggest impact on my cost trends?"}'
+./deploy.sh
 ```
 
-### Direct Lambda Invocation
+### Custom Deployment
 
 ```bash
-aws lambda invoke \
-  --function-name AWS-FinOps-Agent \
-  --payload '{"query": "Provide comprehensive FinOps analysis with strategic recommendations"}' \
-  response.json
+# Deploy to staging environment
+./deploy.sh --env staging --region us-west-2
+
+# Deploy with custom configuration
+./deploy.sh --memory 2048 --timeout 600 --concurrency 5
+
+# Build container only
+./deploy.sh --build-only
 ```
 
-### WebSocket Streaming
+## 📋 **Configuration**
+
+### CloudFormation Parameters
+
+| Parameter | Description | Default | Range |
+|-----------|-------------|---------|-------|
+| `ECRRepository` | ECR repository name | `finops-supervisor-agent` | 2-256 chars |
+| `ImageTag` | Container image tag | `latest` | 1-128 chars |
+| `Environment` | Deployment environment | `prod` | dev/staging/prod |
+| `LambdaTimeout` | Function timeout (seconds) | `300` | 30-900 |
+| `LambdaMemorySize` | Memory allocation (MB) | `1024` | 128-10240 |
+| `ProvisionedConcurrency` | Provisioned executions | `2` | 0-100 |
+| `CorsOrigins` | Allowed CORS origins | `localhost` | Comma-delimited |
+| `EnableApiGateway` | Enable API Gateway | `true` | true/false |
+| `LogRetentionDays` | Log retention period | `30` | 1-3653 |
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `POWERTOOLS_SERVICE_NAME` | Service name for observability | `finops-supervisor-agent` |
+| `POWERTOOLS_METRICS_NAMESPACE` | CloudWatch metrics namespace | `FinOpsAgent` |
+| `LOG_LEVEL` | Logging level | `INFO` |
+| `ENVIRONMENT` | Deployment environment | `prod` |
+| `PYTHONPATH` | Python module path | `/var/task` |
+
+## 🔧 **Usage**
+
+### Direct Function URL
 
 ```bash
-# WebSocket connection with synthesis progress updates
-{
-  "requestContext": {"connectionId": "connection-id"},
-  "query": "Create a comprehensive FinOps roadmap"
-}
+# Get Function URL from CloudFormation outputs
+FUNCTION_URL=$(aws cloudformation describe-stacks \
+  --stack-name finops-supervisor-agent-prod \
+  --query 'Stacks[0].Outputs[?OutputKey==`SupervisorAgentFunctionUrl`].OutputValue' \
+  --output text)
+
+# Send query
+curl -X POST "$FUNCTION_URL" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is my current AWS spend?"}'
 ```
 
-### Supported Input Formats
+### API Gateway (Legacy)
 
-The enhanced supervisor agent accepts queries in multiple formats:
+```bash
+# Get API Gateway endpoint
+API_ENDPOINT=$(aws cloudformation describe-stacks \
+  --stack-name finops-supervisor-agent-prod \
+  --query 'Stacks[0].Outputs[?OutputKey==`SupervisorApiGatewayEndpoint`].OutputValue' \
+  --output text)
 
-```json
-// API Gateway format
-{"query": "your question"}
-
-// Direct Lambda formats
-{"inputText": "your question"}
-{"prompt": "your question"}
-{"body": {"query": "your question"}}
-
-// WebSocket format
-{"requestContext": {"connectionId": "conn-id"}, "query": "your question"}
+# Send query
+curl -X POST "$API_ENDPOINT" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Show me cost optimization recommendations"}'
 ```
 
-## Enhanced Response Format
+### Query Examples
 
-The enhanced supervisor agent returns structured responses with routing metrics:
+The supervisor agent handles various types of FinOps queries:
 
 ```json
 {
-  "query": "original query",
-  "response": "synthesized or aggregated response",
-  "agent": "AWS-FinOps-Supervisor-Enhanced",
-  "timestamp": "2025-06-15T01:00:00.000Z",
-  "routing_metrics": {
-    "agents": ["cost_forecast", "trusted_advisor"],
-    "reasoning": "Fast route: Cost analysis and optimization query",
-    "synthesis_needed": true,
-    "confidence": "high",
-    "routing_method": "fast_path_multi"
+  "query": "What is my current AWS spend?",
+  "context": {
+    "user_id": "user123",
+    "session_id": "session456"
   }
 }
 ```
 
-## Example Enhanced Responses
+**Supported Query Types:**
+- **Cost Analysis**: "What is my current AWS spend?"
+- **Forecasting**: "Forecast my costs for next quarter"
+- **Optimization**: "Show me cost optimization recommendations"
+- **Budget Management**: "How am I tracking against my budget?"
+- **Service Analysis**: "Which services are most expensive?"
+- **Trend Analysis**: "Show me cost trends over time"
 
-### **Traditional Aggregation**
-```
-## Cost Analysis
-Your costs are $12,500/month trending upward...
+## 🏗️ **Building and Deployment**
 
-## Optimization Recommendations  
-8 opportunities identified: Rightsize EC2, Reserved Instances...
-```
+### Container Build Process
 
-### **Intelligent Synthesis**
-```
-# Executive Summary
-Based on your $12,500/month spending with 15% growth trend, rightsizing 12 EC2 instances offers the highest ROI...
+```bash
+# Build with defaults
+./build_lambda_package.sh
 
-# Strategic Insights
-The cost trend analysis reveals EC2 as your primary cost driver ($8,000/month), making rightsizing your most impactful optimization...
+# Build with custom options
+./build_lambda_package.sh \
+  --name my-supervisor-agent \
+  --tag v1.0 \
+  --region us-west-2
 
-# Prioritized Action Plan
-1. **High Impact, Low Effort**: Rightsize EC2 instances → $2,400/month savings
-2. **High Impact, Medium Effort**: Reserved Instance conversion → $1,800/month savings
-
-# Implementation Roadmap
-**30-day actions**: Begin EC2 rightsizing analysis...
-**90-day initiatives**: Implement Reserved Instance strategy...
+# Build only (don't push to ECR)
+./build_lambda_package.sh --build-only
 ```
 
-## IAM Permissions
+### Manual CloudFormation Deployment
 
-The enhanced supervisor agent requires permissions to invoke other Lambda functions:
+```bash
+# Deploy stack
+aws cloudformation deploy \
+  --template-file cloudformation.yaml \
+  --stack-name finops-supervisor-agent-prod \
+  --parameter-overrides \
+    ECRRepository=finops-supervisor-agent \
+    ImageTag=latest \
+    Environment=prod \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-east-1
+```
+
+### Update Deployment
+
+```bash
+# Update container image
+./build_lambda_package.sh --tag v2.0
+
+# Update Lambda function
+aws lambda update-function-code \
+  --function-name finops-supervisor-agent-prod \
+  --image-uri ACCOUNT.dkr.ecr.REGION.amazonaws.com/finops-supervisor-agent:v2.0
+```
+
+## 📊 **Monitoring and Observability**
+
+### CloudWatch Metrics
+
+- **Invocations**: Function execution count
+- **Duration**: Execution time and percentiles
+- **Errors**: Error rate and count
+- **Throttles**: Concurrency throttling events
+- **ProvisionedConcurrencyInvocations**: Warm start invocations
+
+### CloudWatch Alarms
+
+- **Error Rate**: Triggers when error rate exceeds 10 errors in 10 minutes
+- **Duration**: Monitors execution time approaching timeout
+- **Throttles**: Alerts on concurrency throttling
+
+### Logging
+
+```bash
+# View real-time logs
+aws logs tail /aws/lambda/finops-supervisor-agent-prod --follow
+
+# Search for errors
+aws logs filter-log-events \
+  --log-group-name /aws/lambda/finops-supervisor-agent-prod \
+  --filter-pattern "ERROR"
+
+# Search for specific queries
+aws logs filter-log-events \
+  --log-group-name /aws/lambda/finops-supervisor-agent-prod \
+  --filter-pattern "\"What is my current AWS spend\""
+```
+
+### Custom Metrics
+
+The agent publishes custom metrics to CloudWatch:
+
+- `QueryProcessingTime`: Time to process and route queries
+- `AgentInvocations`: Number of specialized agent invocations
+- `FastPathHits`: Queries processed via fast-path routing
+- `ResponseSynthesisTime`: Time to combine agent responses
+
+## 🔒 **Security**
+
+### IAM Permissions
+
+The supervisor agent requires these permissions:
+
+- **Lambda Invoke**: Invoke specialized agents
+- **Bedrock**: Access to foundation models for AI routing
+- **CloudWatch**: Metrics and logging
+- **ECR**: Container image access (for deployment)
+
+### Security Features
+
+- **No Hardcoded Credentials**: Uses IAM roles and environment variables
+- **Least Privilege Access**: Minimal required permissions
+- **CORS Configuration**: Configurable allowed origins
+- **Request Validation**: Input sanitization and validation
+- **Audit Logging**: Comprehensive request/response logging
+
+### Network Security
+
+- **VPC Support**: Optional VPC deployment for network isolation
+- **Security Groups**: Configurable network access controls
+- **Function URLs**: Built-in HTTPS encryption
+- **API Gateway**: Additional security layers and throttling
+
+## 🧪 **Testing**
+
+### Unit Tests
+
+```bash
+# Run unit tests
+cd tests/
+python -m pytest test_*.py -v
+
+# Run specific test
+python test_fast_path_routing.py
+```
+
+### Integration Testing
+
+```bash
+# Test with real AWS services
+python test_enhanced_routing.py
+
+# Test parallel processing
+python test_parallel_processing.py
+
+# Test budget integration
+python test_budget_integration.py
+```
+
+### Load Testing
+
+```bash
+# Concurrent invocations
+for i in {1..50}; do
+  curl -X POST "$FUNCTION_URL" \
+    -H "Content-Type: application/json" \
+    -d '{"query": "What is my current AWS spend?"}' &
+done
+wait
+```
+
+### Local Testing
+
+```bash
+# Run container locally
+docker run --rm -p 9000:8080 finops-supervisor-agent:latest
+
+# Test locally
+curl -X POST "http://localhost:9000/2015-03-31/functions/function/invocations" \
+  -d '{"query": "test query"}'
+```
+
+## 🚨 **Troubleshooting**
+
+### Common Issues
+
+1. **Container Build Failures**
+   ```bash
+   # Check Docker daemon
+   docker info
+   
+   # Check Dockerfile syntax
+   docker build --no-cache .
+   ```
+
+2. **ECR Push Failures**
+   ```bash
+   # Re-authenticate with ECR
+   aws ecr get-login-password --region us-east-1 | \
+     docker login --username AWS --password-stdin \
+     ACCOUNT.dkr.ecr.us-east-1.amazonaws.com
+   ```
+
+3. **Lambda Function Errors**
+   ```bash
+   # Check function configuration
+   aws lambda get-function --function-name finops-supervisor-agent-prod
+   
+   # View recent errors
+   aws logs filter-log-events \
+     --log-group-name /aws/lambda/finops-supervisor-agent-prod \
+     --start-time $(date -d '1 hour ago' +%s)000 \
+     --filter-pattern "ERROR"
+   ```
+
+4. **Agent Communication Issues**
+   ```bash
+   # Test agent connectivity
+   aws lambda invoke \
+     --function-name finops-cost-forecast-agent-prod \
+     --payload '{"test": true}' \
+     response.json
+   ```
+
+### Debug Mode
+
+Enable debug logging:
+
+```bash
+aws lambda update-function-configuration \
+  --function-name finops-supervisor-agent-prod \
+  --environment Variables='{LOG_LEVEL=DEBUG}'
+```
+
+### Performance Optimization
+
+- **Memory Allocation**: Increase memory for CPU-intensive operations
+- **Provisioned Concurrency**: Enable for consistent performance
+- **Container Optimization**: Use multi-stage builds to reduce image size
+- **Fast-Path Routing**: Optimize routing logic for common queries
+
+## 📚 **API Reference**
+
+### Request Format
 
 ```json
 {
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": "lambda:InvokeFunction",
-      "Resource": [
-        "arn:aws:lambda:REGION:ACCOUNT:function:aws-cost-forecast-agent",
-        "arn:aws:lambda:REGION:ACCOUNT:function:trusted-advisor-agent-trusted-advisor-agent",
-        "arn:aws:lambda:REGION:ACCOUNT:function:budget-management-agent"
-      ]
-    }
-  ]
+  "query": "string",
+  "context": {
+    "user_id": "string",
+    "session_id": "string",
+    "preferences": {}
+  },
+  "options": {
+    "include_details": true,
+    "timeout": 30,
+    "agents": ["cost", "advisor", "budget"]
+  }
 }
 ```
 
-## Enhanced Error Handling
+### Response Format
 
-The enhanced supervisor agent provides robust error handling:
+```json
+{
+  "response": "string",
+  "data": {
+    "routing_decision": "string",
+    "agents_invoked": ["string"],
+    "processing_time": 1.23
+  },
+  "metadata": {
+    "request_id": "string",
+    "timestamp": "2024-01-01T00:00:00Z",
+    "version": "1.0"
+  }
+}
+```
 
-- **Agent Failures**: Gracefully handles when individual agents fail
-- **Synthesis Failures**: Falls back to aggregation if synthesis fails
-- **Partial Results**: Provides available data when some agents are unavailable
-- **Clear Error Messages**: Communicates data limitations and suggests alternatives
-- **Structured Errors**: Returns consistent error format for programmatic handling
+## 🔄 **Updates and Maintenance**
 
-## Performance Monitoring
+### Updating Dependencies
 
-### Key Metrics to Track
-- **Routing method distribution**: fast_path_single vs fast_path_multi vs synthesis
-- **Synthesis success rate**: Successful synthesis vs fallback to aggregation
-- **Response latency by path**: Single agent vs aggregation vs synthesis
-- **User satisfaction**: Query resolution effectiveness
+1. Update `requirements.txt`
+2. Rebuild container: `./build_lambda_package.sh`
+3. Redeploy: `./deploy.sh --deploy-only`
 
-### Environment Variables
-- `SYNTHESIS_ENABLED`: Enable/disable synthesis (default: true)
-- `SYNTHESIS_TIMEOUT`: Synthesis timeout in seconds (default: 30)
-- `FAST_PATH_ENABLED`: Enable fast path routing (default: true)
+### Scaling Configuration
 
-## Integration with Existing System
+```bash
+# Update provisioned concurrency
+aws lambda put-provisioned-concurrency-config \
+  --function-name finops-supervisor-agent-prod \
+  --qualifier prod \
+  --provisioned-concurrency-executions 10
 
-The enhanced supervisor agent maintains full backward compatibility:
+# Update memory and timeout
+aws cloudformation update-stack \
+  --stack-name finops-supervisor-agent-prod \
+  --use-previous-template \
+  --parameters \
+    ParameterKey=LambdaMemorySize,ParameterValue=2048 \
+    ParameterKey=LambdaTimeout,ParameterValue=600
+```
 
-- **Backward Compatibility**: Maintains existing API contracts
-- **Gradual Migration**: Allows incremental adoption
-- **Microservice Architecture**: Follows project's microservice principles
-- **Consistent Response Format**: Matches existing UI expectations
+## 📄 **License**
 
-## Future Enhancements
+This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details.
 
-- **Context-Aware Synthesis**: Remember previous queries and build on them
-- **Industry-Specific Advice**: Tailor recommendations by business vertical
-- **Predictive Intelligence**: Proactive recommendations and issue identification
-- **Multi-Modal Analysis**: Visual synthesis with charts and interactive planning
+## 🤝 **Contributing**
+
+Please read [CONTRIBUTING.md](../CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
 ---
 
-**The enhanced supervisor agent transforms your FinOps system from a response aggregator into a true FinOps Strategic Advisor with intelligent synthesis capabilities.**
-
-The supervisor agent uses container-based Lambda deployment to overcome the 250MB package size limit.
-
-#### Building and Deploying
-
-1. Navigate to the supervisor_agent directory:
-```bash
-cd supervisor_agent
-```
-
-2. Make the build script executable and run it:
-```bash
-chmod +x build_lambda_package.sh
-./build_lambda_package.sh
-```
-
-This will:
-- Build a Docker container image with all dependencies
-- Push the image to Amazon ECR repository: `aws-finops-agent`
-- Provide deployment instructions
-
-3. Deploy using CloudFormation:
-```bash
-aws cloudformation deploy \
-  --template-file aws_finops_agent_cf.yaml \
-  --stack-name aws-finops-supervisor-agent \
-  --parameter-overrides \
-    LambdaTimeout=60 \
-    LambdaMemorySize=256 \
-  --capabilities CAPABILITY_NAMED_IAM
-```
-
-#### Container Image Details
-
-- **Base Image**: `public.ecr.aws/lambda/python:3.11`
-- **Size Limit**: Up to 10GB (vs 250MB for zip packages)
-- **ECR Repository**: `aws-finops-agent`
-- **Dependencies**: All Strands SDK dependencies included in container
-```
-
-## Usage
-
-### API Gateway Endpoint
-
-After deployment, the supervisor agent is accessible via API Gateway:
-
-```bash
-curl -X POST \
-  https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/prod/query \
-  -H 'Content-Type: application/json' \
-  -d '{"query": "What are my current AWS costs and optimization opportunities?"}'
-```
-
-### Direct Lambda Invocation
-
-```bash
-aws lambda invoke \
-  --function-name AWS-FinOps-Agent \
-  --payload '{"query": "Provide comprehensive FinOps analysis"}' \
-  response.json
-```
-
-### Supported Input Formats
-
-The supervisor agent accepts queries in multiple formats:
-
-```json
-// API Gateway format
-{"query": "your question"}
-
-// Direct Lambda formats
-{"inputText": "your question"}
-{"prompt": "your question"}
-{"body": {"query": "your question"}}
-```
-
-## Response Format
-
-The supervisor agent returns structured responses:
-
-```json
-{
-  "query": "original query",
-  "response": "synthesized response from agents",
-  "agent": "AWS-FinOps-Agent",
-  "timestamp": "2025-06-10T02:00:00.000Z"
-}
-```
-
-## IAM Permissions
-
-The supervisor agent requires permissions to invoke other Lambda functions:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": "lambda:InvokeFunction",
-      "Resource": [
-        "arn:aws:lambda:REGION:ACCOUNT:function:aws-cost-forecast-agent",
-        "arn:aws:lambda:REGION:ACCOUNT:function:trusted-advisor-agent-trusted-advisor-agent"
-      ]
-    }
-  ]
-}
-```
-
-## Error Handling
-
-The supervisor agent provides robust error handling:
-
-- **Agent Failures**: Gracefully handles when individual agents fail
-- **Partial Results**: Provides available data when some agents are unavailable
-- **Clear Error Messages**: Communicates data limitations and suggests alternatives
-- **Structured Errors**: Returns consistent error format for programmatic handling
-
-## Integration with Existing System
-
-The supervisor agent is designed to work alongside the existing FinOps system:
-
-- **Backward Compatibility**: Maintains existing API contracts
-- **Gradual Migration**: Allows incremental adoption
-- **Microservice Architecture**: Follows project's microservice principles
-- **Consistent Response Format**: Matches existing UI expectations
-
-## Future Enhancements
-
-- **Async Processing**: Implement parallel agent invocation for better performance
-- **Caching**: Add response caching for frequently requested data
-- **Additional Agents**: Easy integration of new specialized agents
-- **Advanced Routing**: ML-based query routing for better agent selection
+**Part of the [FinOps Agent](../README.md) project**
